@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
 }
 
-val releaseVersionName = "1.2.8-max"
+val releaseVersionName = "1.2.9"
 val releaseApkName = "LineCode Pro $releaseVersionName.APK"
 val releaseIdsigName = "$releaseApkName.idsig"
 val releaseSigningProperties = Properties()
@@ -113,7 +113,7 @@ android {
         applicationId = "cn.lineai"
         minSdk = 26
         targetSdk = 37
-        versionCode = 32
+        versionCode = 33
         versionName = releaseVersionName
         // proot 等非 JNI 命名的 so 需要 Android 10 安装器实际解压到 lib 目录
         // （extractNativeLibs=false 时部分 ROM 不为无 loadLibrary 引用的 so 建链接）
