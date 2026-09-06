@@ -156,15 +156,26 @@ public final class LinuxEnvironmentController {
         refreshUi();
     }
 
+    /** Alpine .sha256 文件格式为 "<hash>  <filename>"；只取哈希字段。包级可见供测试。 */
+    static String extractSha256(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        int separator = value.indexOf(' ');
+        if (separator > 0) {
+            value = value.substring(0, separator);
+        }
+        return value;
+    }
+
     private void installInternal(String arch) throws Exception {
         File filesDir = context.getFilesDir();
 
         byte[] tarGz = obtainRootfs(arch);
 
         reportProgress(PHASE_VERIFY, "");
-        String expectedSha256 = SimpleHttpClient.get(
+        // Alpine .sha256 文件格式为 "<hash>  <filename>"（GNU sha256sum 风格）；只取哈希字段
+        String expectedSha256 = extractSha256(SimpleHttpClient.get(
                 LinuxRootfsLayout.minirootfsSha256Url(arch),
-                15000, 30000).trim();
+                15000, 30000));
         String actualSha256 = sha256Hex(tarGz);
         if (expectedSha256.length() > 0 && !expectedSha256.equalsIgnoreCase(actualSha256)) {
             throw new IOException("sha256 mismatch: expected " + expectedSha256 + " got " + actualSha256);
