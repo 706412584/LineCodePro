@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -35,7 +37,15 @@ public final class AlpineTarExtractor {
         }
     }
 
-    /** 直接从字节流解压（下载后不经临时文件）。 */
+    /**
+     * 解压 tar.gz 到 targetDir（须已存在或可创建）。
+     *
+     * <p>symlink 创建失败（ROM 禁止 app uid 调 symlink()，如 OPPO ColorOS）时，
+     * 降级为复制链接目标文件（保证 guest 内可执行）；目标尚未解出时延迟到
+     * tar 处理完毕后统一补做。</p>
+     *
+     * @throws IOException 格式损坏 / 磁盘错误 / 不支持的 entry 类型
+     */
     public static void extract(byte[] tarGzBytes, File targetDir) throws IOException {
         try (InputStream in = new GZIPInputStream(
                 new java.io.ByteArrayInputStream(tarGzBytes))) {
@@ -47,6 +57,8 @@ public final class AlpineTarExtractor {
         if (!targetDir.exists() && !targetDir.mkdirs()) {
             throw new IOException("cannot create target dir: " + targetDir);
         }
+        // symlink 创建失败的条目（ROM 禁 symlink）：tar 全部解完后按目标复制降级
+        List<String[]> deferredSymlinks = new ArrayList<>();
         byte[] header = new byte[BLOCK_SIZE];
         while (true) {
             if (!readFully(in, header)) {
@@ -60,6 +72,7 @@ public final class AlpineTarExtractor {
                 continue;
             }
             long size = fieldOctal(header, 124, 12);
+            long mode = fieldOctal(header, 100, 8);
             char type = typeFlag(header);
             String linkName = fieldString(header, 157, 100);
             if (size < 0 || size > MAX_ENTRY_BYTES) {
@@ -69,7 +82,7 @@ public final class AlpineTarExtractor {
             switch (type) {
                 case '0': // 普通文件（含 GNU 旧式 '\0'）
                 case '\0':
-                    writeFile(in, out, size);
+                    writeFile(in, out, size, mode);
                     skipPadding(in, size);
                     break;
                 case '5':
@@ -82,7 +95,10 @@ public final class AlpineTarExtractor {
                         //noinspection ResultOfMethodCallIgnored
                         out.delete();
                     }
-                    createSymlink(linkName, out);
+                    if (!createSymlink(linkName, out)) {
+                        // ROM 禁 symlink：延迟到所有文件解完后复制目标降级
+                        deferredSymlinks.add(new String[] {out.getAbsolutePath(), linkName});
+                    }
                     break;
                 case '1': // 硬链接
                     File source = resolveSafe(targetDir, linkName);
@@ -103,9 +119,48 @@ public final class AlpineTarExtractor {
                     break;
             }
         }
+        // 降级补做：按链接目标复制实体文件（目标此时已全部解出）
+        for (String[] entry : deferredSymlinks) {
+            File link = new File(entry[0]);
+            File source = resolveLinkTarget(targetDir, link.getParentFile(), entry[1]);
+            if (source == null || !source.isFile()) {
+                throw new IOException("symlink target unavailable for copy fallback: "
+                        + entry[0] + " -> " + entry[1]);
+            }
+            copyFile(source, link);
+        }
     }
 
-    private static void writeFile(InputStream in, File out, long size) throws IOException {
+    /**
+     * 解析链接目标（支持绝对路径按 rootfs 根、相对路径按链接所在目录）。
+     * 找不到返回 null。
+     */
+    private static File resolveLinkTarget(File rootfsDir, File linkDir, String target) {
+        if (target == null || target.length() == 0) {
+            return null;
+        }
+        File resolved;
+        if (target.startsWith("/")) {
+            resolved = new File(rootfsDir, target.substring(1));
+        } else {
+            resolved = new File(linkDir, target);
+        }
+        if (resolved.isFile()) {
+            return resolved;
+        }
+        // 目标自身是（已降级复制的）链接文件：跟一层
+        try {
+            File canonical = resolved.getCanonicalFile();
+            if (canonical.isFile() && !canonical.equals(resolved)) {
+                return canonical;
+            }
+        } catch (IOException ignored) {
+        }
+        return resolved.isFile() ? resolved : null;
+    }
+
+    /** 写入普通文件并按 tar mode 位恢复执行权限（busybox 等在 rootfs 内必须可执行）。 */
+    private static void writeFile(InputStream in, File out, long size, long mode) throws IOException {
         File parent = out.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("cannot mkdir: " + parent);
@@ -130,33 +185,34 @@ public final class AlpineTarExtractor {
                 remaining -= n;
             }
         }
+        if ((mode & 0111) != 0) {
+            // owner/group/other 任一执行位 → owner 可执行即可（app uid 即属主）
+            //noinspection ResultOfMethodCallIgnored
+            out.setExecutable(true, true);
+        }
     }
 
-    private static void createSymlink(String target, File link) throws IOException {
+    /**
+     * 创建符号链接。
+     *
+     * @return true 表示真实 symlink 建成；false 表示本 ROM 禁止 symlink，
+     *         调用方应走复制目标的降级路径（见 extractStream 尾部）。
+     */
+    private static boolean createSymlink(String target, File link) throws IOException {
         try {
             Os.symlink(target, link.getAbsolutePath());
-            return;
+            return true;
         } catch (Exception primary) {
-            // EEXIST：残留同名文件（上次失败安装）——删除后重试一次
+            // EEXIST：残留同名文件——删除后重试一次
             //noinspection ResultOfMethodCallIgnored
             link.delete();
             try {
                 Os.symlink(target, link.getAbsolutePath());
-                return;
+                return true;
             } catch (Exception retried) {
-                // 降级：内容为目标路径的普通文件。父目录可能尚未创建，先补齐。
-                File parent = link.getParentFile();
-                if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                    throw new IOException("symlink failed (cannot create parent): " + link
-                            + " cause: " + retried, retried);
-                }
-                try (OutputStream output = new FileOutputStream(link)) {
-                    output.write(target.getBytes(StandardCharsets.UTF_8));
-                } catch (IOException fallbackFailure) {
-                    throw new IOException("symlink failed: " + link
-                            + " os: " + retried.getMessage()
-                            + " fallback: " + fallbackFailure.getMessage(), retried);
-                }
+                // 任何失败（ROM 禁止 EPERM/EROFS、EEXIST 残留、JVM 测试环境 not-mocked）
+                // 都交给复制目标降级——复制出的实体文件对 guest 完全可用
+                return false;
             }
         }
     }
