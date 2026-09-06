@@ -100,6 +100,9 @@ public final class LinuxEnvironmentController {
         if (meta == null || !LinuxRootfsLayout.isInstalled(context.getFilesDir())) {
             return lastError.length() > 0 ? State.FAILED : State.MISSING;
         }
+        if (!meta.prootSupported && meta.prootUnsupportedReason.length() > 0) {
+            lastError = meta.prootUnsupportedReason;
+        }
         return meta.prootSupported ? State.INSTALLED : State.UNSUPPORTED;
     }
 
@@ -203,14 +206,20 @@ public final class LinuxEnvironmentController {
                 context.getApplicationInfo().nativeLibraryDir, "libproot.so").getAbsolutePath();
         ProotCommandBuilder.ensureRuntimeLayout(prootBin, rootfsDir);
 
-        boolean supported = probeProot(rootfsDir);
+        TerminalIpcProvider.ProbeResult probe = probeProot(rootfsDir);
+        boolean supported = probe.supported;
         if (supported) {
             reportProgress(PHASE_TOOLS, "");
             preinstallToolPackages(prootBin, rootfsDir);
+        } else {
+            // 失败原因进 lastError（UI 回显）与 meta（重启后仍可见）
+            lastError = probe.output;
+            Log.w(TAG, "proot unsupported on this device: " + probe.output);
         }
         LinuxRootfsLayout.writeMeta(filesDir, new LinuxRootfsLayout.Meta(
                 LinuxRootfsLayout.ALPINE_PATCH, arch,
-                System.currentTimeMillis(), supported));
+                System.currentTimeMillis(), supported,
+                supported ? "" : probe.output));
     }
 
     /**
@@ -294,21 +303,22 @@ public final class LinuxEnvironmentController {
     }
 
     /** 在 :terminal 进程跑 guest busybox 探测 proot 可用性。 */
-    private boolean probeProot(File rootfsDir) {
+    /** 探测 proot；provider 不可用时返回带原因的失败结果（而非静默 false）。 */
+    private TerminalIpcProvider.ProbeResult probeProot(File rootfsDir) {
         if (ipcProviderManager == null) {
-            return false;
+            return new TerminalIpcProvider.ProbeResult(false, "terminal provider manager unavailable");
         }
         Object found = ipcProviderManager.getProviderByType(IpcProviderType.TERMINAL);
         if (!(found instanceof TerminalIpcProvider)) {
-            return false;
+            return new TerminalIpcProvider.ProbeResult(false, "built-in terminal provider not bound yet");
         }
         TerminalIpcProvider provider = (TerminalIpcProvider) found;
         if (!provider.isBound()) {
-            return false;
+            return new TerminalIpcProvider.ProbeResult(false, "built-in terminal provider not bound yet");
         }
         String prootBin = new File(
                 context.getApplicationInfo().nativeLibraryDir, "libproot.so").getAbsolutePath();
-        return provider.probeProot(prootBin, rootfsDir);
+        return provider.probeProotDetailed(prootBin, rootfsDir);
     }
 
     private static String sha256Hex(byte[] data) throws Exception {

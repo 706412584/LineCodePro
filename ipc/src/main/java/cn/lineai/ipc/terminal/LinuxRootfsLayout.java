@@ -96,12 +96,20 @@ public final class LinuxRootfsLayout {
         public final String arch;
         public final long installedAt;
         public final boolean prootSupported;
+        /** proot 探测失败原因（supported=true 时为空）。 */
+        public final String prootUnsupportedReason;
 
         public Meta(String alpineVersion, String arch, long installedAt, boolean prootSupported) {
+            this(alpineVersion, arch, installedAt, prootSupported, "");
+        }
+
+        public Meta(String alpineVersion, String arch, long installedAt, boolean prootSupported,
+                    String prootUnsupportedReason) {
             this.alpineVersion = alpineVersion == null ? "" : alpineVersion;
             this.arch = arch == null ? "" : arch;
             this.installedAt = installedAt;
             this.prootSupported = prootSupported;
+            this.prootUnsupportedReason = prootUnsupportedReason == null ? "" : prootUnsupportedReason;
         }
     }
 
@@ -124,7 +132,8 @@ public final class LinuxRootfsLayout {
                     json.optString("alpineVersion", ""),
                     json.optString("arch", ""),
                     json.optLong("installedAt", 0L),
-                    json.optBoolean("prootSupported", false));
+                    json.optBoolean("prootSupported", false),
+                    json.optString("prootUnsupportedReason", ""));
         } catch (Exception e) {
             return null;
         }
@@ -138,6 +147,7 @@ public final class LinuxRootfsLayout {
             json.put("arch", meta.arch);
             json.put("installedAt", meta.installedAt);
             json.put("prootSupported", meta.prootSupported);
+            json.put("prootUnsupportedReason", meta.prootUnsupportedReason);
         } catch (Exception e) {
             throw new IOException(e);
         }

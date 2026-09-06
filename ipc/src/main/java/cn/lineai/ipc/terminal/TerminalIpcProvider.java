@@ -51,20 +51,63 @@ public final class TerminalIpcProvider extends BaseIpcProvider {
         return executeShell(wrapped, "", timeoutMs, callback);
     }
 
+    /** proot 探测结果：supported + 失败时的输出详情（供 UI 回显诊断）。 */
+    public static final class ProbeResult {
+        public final boolean supported;
+        public final String output;
+
+        public ProbeResult(boolean supported, String output) {
+            this.supported = supported;
+            this.output = output == null ? "" : output;
+        }
+    }
+
     /**
      * 探测当前设备是否支持 proot（SELinux/seccomp 兼容性）。
-     *
-     * @return true 表示 guest 内 busybox 可执行
+     * 失败时捕获输出（proot 的 stderr / loader 报错）供诊断回显。
      */
-    public boolean probeProot(String prootBin, File rootfsDir) {
+    public ProbeResult probeProotDetailed(String prootBin, File rootfsDir) {
+        StringBuilder output = new StringBuilder();
         try {
             TerminalShellResult result = executeShell(
                     ProotCommandBuilder.build(prootBin, rootfsDir, "", "busybox echo __lineai_proot_ok__"),
-                    "", 15000L, null);
-            return result.isSuccess();
+                    "", 15000L, new TerminalShellCallback() {
+                        @Override
+                        public void onOutput(String content) {
+                            synchronized (output) {
+                                output.append(content == null ? "" : content);
+                            }
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            synchronized (output) {
+                                output.append(error == null ? "" : error);
+                            }
+                        }
+
+                        @Override
+                        public void onComplete(int exitCode) {
+                        }
+                    });
+            String text = output.toString().trim();
+            if (result.isSuccess() && text.contains("__lineai_proot_ok__")) {
+                return new ProbeResult(true, text);
+            }
+            return new ProbeResult(false, text.length() == 0
+                    ? "proot exited with code " + result.getExitCode() : text);
         } catch (Exception e) {
-            return false;
+            String message = e.getMessage() == null ? e.toString() : e.getMessage();
+            synchronized (output) {
+                String streamed = output.toString().trim();
+                return new ProbeResult(false, streamed.length() == 0 ? message : streamed + "\n" + message);
+            }
         }
+    }
+
+    /** 兼容入口：仅判断成败。 */
+    public boolean probeProot(String prootBin, File rootfsDir) {
+        return probeProotDetailed(prootBin, rootfsDir).supported;
     }
 
     public TerminalShellResult executeShell(String command, String cwd, long timeoutMs,

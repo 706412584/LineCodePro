@@ -693,7 +693,8 @@ public final class MainCoordinator implements MainUiController {
             String envState = linuxEnvironmentController.state().name().toLowerCase(java.util.Locale.ROOT);
             if (linuxEnvironmentController.isInstalling() && linuxEnvironmentController.installPhase().length() > 0) {
                 envState = envState + ":" + linuxEnvironmentController.installPhase();
-            } else if (envState.equals("failed") && linuxEnvironmentController.lastError().length() > 0) {
+            } else if ((envState.equals("failed") || envState.equals("unsupported"))
+                    && linuxEnvironmentController.lastError().length() > 0) {
                 envState = envState + ":" + linuxEnvironmentController.lastError();
             }
             return new McpSettingsState(

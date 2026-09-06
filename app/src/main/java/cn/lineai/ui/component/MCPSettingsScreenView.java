@@ -128,6 +128,7 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         String rest = envState.contains(":") ? envState.substring(envState.indexOf(':') + 1) : "";
         boolean installing = "installing".equals(baseState);
         boolean failed = "failed".equals(baseState);
+        boolean unsupported = "unsupported".equals(baseState);
 
         String statusText = linuxStatusText(context, baseState, installing ? rest : "");
         TextView status = desc(context, statusText);
@@ -135,7 +136,7 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         statusParams.topMargin = LineTheme.dp(context, LineTheme.SM);
         card.addView(status, statusParams);
 
-        if (failed && rest.length() > 0) {
+        if ((failed || unsupported) && rest.length() > 0) {
             TextView error = LineTheme.text(context,
                     context.getString(R.string.screen_mcp_linux_error_prefix) + rest,
                     LineTheme.FONT_XS, LineTheme.DANGER, android.graphics.Typeface.NORMAL);
