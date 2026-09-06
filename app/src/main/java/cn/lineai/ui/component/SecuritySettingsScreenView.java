@@ -57,13 +57,14 @@ public final class SecuritySettingsScreenView extends ScreenScaffoldView {
                 context.getString(R.string.screen_security_proxy_host),
                 proxyHost == null ? "" : proxyHost,
                 "127.0.0.1", "", false, false);
+        LineTheme.padding(proxyHostField, LineTheme.LG, LineTheme.LG, LineTheme.LG, 0);
         proxy.addView(proxyHostField, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
         proxyPortField = new FormTextFieldView(context,
                 context.getString(R.string.screen_security_proxy_port),
                 proxyPort > 0 ? String.valueOf(proxyPort) : "",
                 "7890", context.getString(R.string.screen_security_proxy_hint), false, false);
+        LineTheme.padding(proxyPortField, LineTheme.LG, LineTheme.SM, LineTheme.LG, 0);
         LinearLayout.LayoutParams portParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-        portParams.topMargin = LineTheme.dp(context, LineTheme.SM);
         proxy.addView(proxyPortField, portParams);
 
         LinearLayout proxyActions = new LinearLayout(context);
@@ -96,6 +97,7 @@ public final class SecuritySettingsScreenView extends ScreenScaffoldView {
         proxyActions.addView(clearButton, new LinearLayout.LayoutParams(0, LineTheme.dp(context, 42), 1f));
         LinearLayout.LayoutParams actionsParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
         actionsParams.topMargin = LineTheme.dp(context, LineTheme.SM);
+        LineTheme.padding(proxyActions, LineTheme.LG, 0, LineTheme.LG, LineTheme.SM);
         proxy.addView(proxyActions, actionsParams);
         proxy.addRow(new ActionRowView(context, IconButtonView.GLOBE,
                 context.getString(R.string.screen_security_section_proxy),

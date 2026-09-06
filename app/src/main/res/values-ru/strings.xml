@@ -269,6 +269,8 @@
     <string name="screen_model_add_query_button">Запросить</string>
     <string name="screen_model_add_query_button_loading">Запрос</string>
     <string name="screen_model_add_picker_title">Выбрать модель</string>
+    <string name="screen_model_add_batch_preview">Массовое создание моделей: %1$d</string>
+    <string name="screen_model_add_batch_saved">Создано моделей: %1$d</string>
     <string name="screen_model_add_test_button">Тест</string>
     <string name="screen_model_add_test_result_title">Результат теста</string>
     <string name="screen_model_add_test_result_confirm">OK</string>

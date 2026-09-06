@@ -269,6 +269,8 @@
     <string name="screen_model_add_query_button">查询</string>
     <string name="screen_model_add_query_button_loading">查询中</string>
     <string name="screen_model_add_picker_title">选择模型</string>
+    <string name="screen_model_add_batch_preview">将批量创建 %1$d 个模型</string>
+    <string name="screen_model_add_batch_saved">已创建 %1$d 个模型</string>
     <string name="screen_model_add_test_button">测试</string>
     <string name="screen_model_add_test_result_title">测试结果</string>
     <string name="screen_model_add_test_result_confirm">确定</string>

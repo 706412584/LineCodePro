@@ -269,6 +269,8 @@
     <string name="screen_model_add_query_button">Query</string>
     <string name="screen_model_add_query_button_loading">Querying</string>
     <string name="screen_model_add_picker_title">Pick model</string>
+    <string name="screen_model_add_batch_preview">Batch create %1$d models</string>
+    <string name="screen_model_add_batch_saved">Created %1$d models</string>
     <string name="screen_model_add_test_button">Test</string>
     <string name="screen_model_add_test_result_title">Test result</string>
     <string name="screen_model_add_test_result_confirm">OK</string>

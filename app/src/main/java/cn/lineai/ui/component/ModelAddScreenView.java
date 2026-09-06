@@ -51,6 +51,8 @@ public final class ModelAddScreenView extends LinearLayout {
     private final Listener listener;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ArrayList<String> fetchedModelIds = new ArrayList<>();
+    /** 目录多选批量模式暂存：非空时保存动作逐条生成配置。 */
+    private java.util.List<String> batchModelIds = java.util.Collections.emptyList();
     private LinearLayout queryButton;
     private TextView queryLabel;
     private TextView queryText;
@@ -226,7 +228,7 @@ public final class ModelAddScreenView extends LinearLayout {
                     return;
                 }
                 if (!fetchedModelIds.isEmpty()) {
-                    showModelPicker();
+                    showMultiModelPicker();
                     return;
                 }
                 fetchModelCatalog();
@@ -308,6 +310,27 @@ public final class ModelAddScreenView extends LinearLayout {
 
         saveAction.setOnClickListener(v -> {
             if (!saveEnabled) {
+                return;
+            }
+            if (batchModelIds.size() > 1 && !customIdSwitch.isChecked() && editingModel == null) {
+                // 批量模式：同一 baseURL/key 逐条创建，名字取模型 id
+                int saved = 0;
+                for (String id : batchModelIds) {
+                    selectedModelId[0] = id;
+                    ModelConfig model = buildModelConfig(context);
+                    if (model != null) {
+                        listener.onSave(model);
+                        saved++;
+                    } else {
+                        break;
+                    }
+                }
+                if (saved > 0) {
+                    batchModelIds = java.util.Collections.emptyList();
+                    Toast.makeText(getContext(),
+                            getContext().getString(R.string.screen_model_add_batch_saved, saved),
+                            Toast.LENGTH_SHORT).show();
+                }
                 return;
             }
             ModelConfig model = buildModelConfig(context);
@@ -457,7 +480,7 @@ public final class ModelAddScreenView extends LinearLayout {
                         Toast.makeText(getContext(), R.string.screen_model_add_fetch_failed, Toast.LENGTH_LONG).show();
                         return;
                     }
-                    showModelPicker();
+                    showMultiModelPicker();
                 });
             } catch (Exception e) {
                 ErrorLog.record("model_catalog", "model catalog query failed", e,
@@ -487,6 +510,40 @@ public final class ModelAddScreenView extends LinearLayout {
                 customIdSwitch.setChecked(false);
                 renderModelIdInput(false);
             }
+            updateSaveState();
+        });
+    }
+
+    /** 目录多选：一次为同一 baseURL/key 批量创建多个模型配置。 */
+    private void showMultiModelPicker() {
+        ModelPickerDialog.showMulti(getContext(), fetchedModelIds, selectedModelId[0], modelIds -> {
+            if (modelIds.isEmpty()) {
+                return;
+            }
+            if (modelIds.size() == 1) {
+                // 单选走原路径，行为不变
+                selectedModelId[0] = modelIds.get(0);
+                customIdSwitch.setChecked(false);
+                renderModelIdInput(false);
+                updateSaveState();
+                return;
+            }
+            // 批量模式：暂存选中列表，保存时逐条生成
+            batchModelIds = new ArrayList<>(modelIds);
+            selectedModelId[0] = modelIds.get(0);
+            customIdSwitch.setChecked(false);
+            renderModelIdInput(false);
+            StringBuilder preview = new StringBuilder();
+            for (int i = 0; i < modelIds.size(); i++) {
+                if (i > 0) {
+                    preview.append(", ");
+                }
+                preview.append(modelIds.get(i));
+            }
+            Toast.makeText(getContext(),
+                    getContext().getString(R.string.screen_model_add_batch_preview, modelIds.size())
+                            + ": " + preview,
+                    Toast.LENGTH_LONG).show();
             updateSaveState();
         });
     }
