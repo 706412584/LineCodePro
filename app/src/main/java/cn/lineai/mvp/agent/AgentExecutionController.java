@@ -915,11 +915,13 @@ public final class AgentExecutionController {
         if (!allowedToolNames.contains(call.getName())) {
             return ToolResult.of(call.getId(), call.getName(), "Agent 不允许调用此工具: " + call.getName(), true);
         }
+        android.content.Context appContext = context == null ? null : context.getApplicationContext();
         ToolContext context = ToolContext.builder()
                 .homePath(homePath)
                 .extraWriteRoots(skillWriteRoots(homePath))
                 .toolCallId("")
                 .bypassPathProtection(isBypassPathProtection())
+                .appContext(appContext)
                 .build();
         ToolResult scopeError = validateAgentWriteScope(call, type, writeScope, context);
         if (scopeError != null) {

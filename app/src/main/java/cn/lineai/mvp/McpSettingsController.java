@@ -19,4 +19,10 @@ public interface McpSettingsController {
     String getImageGenerationModelId();
 
     void onImageGenerationModelSelected(String id);
+
+    void onLinuxEnvEnabledChanged(boolean enabled);
+
+    void onLinuxEnvInstallRequested();
+
+    void onLinuxEnvDeleteRequested();
 }

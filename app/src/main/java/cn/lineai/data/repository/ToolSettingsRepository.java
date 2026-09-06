@@ -166,6 +166,16 @@ public final class ToolSettingsRepository implements ToolSettingsStore {
     }
 
     @Override
+    public synchronized boolean isLinuxEnvEnabled() {
+        return settingsRepository.getBoolean(KEY_LINUX_ENV_ENABLED, false);
+    }
+
+    @Override
+    public synchronized void setLinuxEnvEnabled(boolean enabled) {
+        settingsRepository.setBoolean(KEY_LINUX_ENV_ENABLED, enabled);
+    }
+
+    @Override
     public synchronized List<McpToolConfig> getConfigs() {
         String executionMode = getExecutionMode();
         ArrayList<McpToolConfig> configs = new ArrayList<>();
@@ -183,8 +193,17 @@ public final class ToolSettingsRepository implements ToolSettingsStore {
                 getConfigs(),
                 webSearchConfigRepository.get(),
                 getImageUnderstandingModelId(),
-                getImageGenerationModelId()
+                getImageGenerationModelId(),
+                isLinuxEnvEnabled(),
+                linuxEnvState
         );
+    }
+
+    /** Linux 环境状态由 controller 写入（避免 repository 依赖磁盘探测）。 */
+    private volatile String linuxEnvState = "";
+
+    public void setLinuxEnvState(String state) {
+        linuxEnvState = state == null ? "" : state;
     }
 
     @Override

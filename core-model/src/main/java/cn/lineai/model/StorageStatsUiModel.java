@@ -15,6 +15,7 @@ public final class StorageStatsUiModel {
     private final int configCount;
     private final long homeSize;
     private final int homeCount;
+    private final long linuxRootfsSize;
 
     public StorageStatsUiModel(
             long totalSize,
@@ -28,6 +29,23 @@ public final class StorageStatsUiModel {
             long homeSize,
             int homeCount
     ) {
+        this(totalSize, totalCount, diffCacheSize, diffCacheCount, chatSize, chatCount,
+                configSize, configCount, homeSize, homeCount, 0L);
+    }
+
+    public StorageStatsUiModel(
+            long totalSize,
+            int totalCount,
+            long diffCacheSize,
+            int diffCacheCount,
+            long chatSize,
+            int chatCount,
+            long configSize,
+            int configCount,
+            long homeSize,
+            int homeCount,
+            long linuxRootfsSize
+    ) {
         this.totalSize = totalSize;
         this.totalCount = totalCount;
         this.diffCacheSize = diffCacheSize;
@@ -38,6 +56,7 @@ public final class StorageStatsUiModel {
         this.configCount = configCount;
         this.homeSize = homeSize;
         this.homeCount = homeCount;
+        this.linuxRootfsSize = linuxRootfsSize;
     }
 
     public long getTotalSize() {
@@ -80,6 +99,10 @@ public final class StorageStatsUiModel {
         return homeCount;
     }
 
+    public long getLinuxRootfsSize() {
+        return linuxRootfsSize;
+    }
+
     public String formatSize(long bytes) {
         if (bytes < 1024) {
             return bytes + " B";
@@ -113,5 +136,9 @@ public final class StorageStatsUiModel {
 
     public String formatHomeSize() {
         return formatSize(homeSize);
+    }
+
+    public String formatLinuxRootfsSize() {
+        return formatSize(linuxRootfsSize);
     }
 }

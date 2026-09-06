@@ -96,6 +96,7 @@ public final class MainCoordinator implements MainUiController {
     private final cn.lineai.data.repository.KeepAliveRepository keepAliveRepository;
     ContextCompactionController contextCompactionController;
     IpcProviderController ipcProviderController;
+    LinuxEnvironmentController linuxEnvironmentController;
     final GenerationController generationController = new GenerationController();
     GenerationLifecycleController generationLifecycleController;
     GenerationFlowController generationFlowController;
@@ -667,7 +668,18 @@ public final class MainCoordinator implements MainUiController {
 
     @Override
     public McpSettingsState getMcpSettingsState() {
-        return settingsManagementController.getMcpSettingsState();
+        McpSettingsState state = settingsManagementController.getMcpSettingsState();
+        if (linuxEnvironmentController != null && state != null) {
+            return new McpSettingsState(
+                    state.getExecutionMode(),
+                    state.getConfigs(),
+                    state.getWebSearchConfig(),
+                    state.getImageUnderstandingModelId(),
+                    state.getImageGenerationModelId(),
+                    linuxEnvironmentController.isEnabled(),
+                    linuxEnvironmentController.state().name().toLowerCase(java.util.Locale.ROOT));
+        }
+        return state;
     }
 
     @Override
@@ -683,6 +695,31 @@ public final class MainCoordinator implements MainUiController {
     @Override
     public void onMcpWebSearchConfigChanged(WebSearchConfig config) {
         settingsManagementController.setMcpWebSearchConfig(config);
+    }
+
+    @Override
+    public void onLinuxEnvEnabledChanged(boolean enabled) {
+        if (linuxEnvironmentController != null) {
+            linuxEnvironmentController.setEnabled(enabled);
+        }
+        refreshVisibleScreen("mcp");
+        render();
+    }
+
+    @Override
+    public void onLinuxEnvInstallRequested() {
+        if (linuxEnvironmentController != null) {
+            linuxEnvironmentController.install();
+        }
+    }
+
+    @Override
+    public void onLinuxEnvDeleteRequested() {
+        if (linuxEnvironmentController != null) {
+            linuxEnvironmentController.delete();
+            refreshVisibleScreen("mcp");
+            render();
+        }
     }
 
     @Override
@@ -1166,7 +1203,8 @@ public final class MainCoordinator implements MainUiController {
                 stats.configSize,
                 stats.configCount,
                 stats.homeSize,
-                stats.homeCount
+                stats.homeCount,
+                linuxEnvironmentController == null ? 0L : linuxEnvironmentController.installedSizeBytes()
         );
     }
 

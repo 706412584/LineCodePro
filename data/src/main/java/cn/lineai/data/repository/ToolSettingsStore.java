@@ -23,6 +23,7 @@ public interface ToolSettingsStore {
     String KEY_MCP_EXECUTION_MODE = "@lineai_mcp_execution_mode";
     String KEY_IMAGE_UNDERSTANDING_MODEL_ID = "@lineai_image_understanding_model_id";
     String KEY_IMAGE_GENERATION_MODEL_ID = "@lineai_image_generation_model_id";
+    String KEY_LINUX_ENV_ENABLED = "@lineai_linux_env_enabled";
 
     String PERMISSION_READONLY = "readonly";
     String PERMISSION_AUTO = "auto";
@@ -50,6 +51,15 @@ public interface ToolSettingsStore {
      * 设置当前 MCP 执行目标。
      */
     void setExecutionMode(String mode);
+
+    /**
+     * 内置终端提供者的 Linux 环境子开关（proot + Alpine）。
+     * 默认 false；仅 terminal_provider 模式下的内置 provider 生效。
+     */
+    default boolean isLinuxEnvEnabled() { return false; }
+
+    /** 设置 Linux 环境子开关。 */
+    default void setLinuxEnvEnabled(boolean enabled) {}
 
     default boolean isCommandPermanentlyAllowed(String scope, cn.lineai.model.tool.ToolCall call) { return false; }
     default void allowCommandPermanently(String scope, cn.lineai.model.tool.ToolCall call) {}

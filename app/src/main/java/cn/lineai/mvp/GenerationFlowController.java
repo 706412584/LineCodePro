@@ -827,8 +827,16 @@ final class GenerationFlowController {
                         ? null
                         : agentExecutionController.getAgentResultRegistry())
                 .bypassPathProtection(isBypassPathProtection())
+                .appContext(hostAppContext == null ? null : hostAppContext.get())
                 .build();
     }
+
+    /** app Context 提供者（避免控制器持有 Activity 引用，取 application 级）。 */
+    void setHostAppContextSupplier(java.util.function.Supplier<android.content.Context> supplier) {
+        this.hostAppContext = supplier;
+    }
+
+    private java.util.function.Supplier<android.content.Context> hostAppContext;
 
     void setBypassPathProtectionSupplier(java.util.function.BooleanSupplier supplier) {
         this.bypassPathProtectionSupplier = supplier != null ? supplier : () -> false;

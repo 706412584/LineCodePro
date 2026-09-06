@@ -256,6 +256,7 @@ LineCode 在 **设置 → MCP execution mode** 里提供三种 Shell / 文件工
 | **Local（本地）** | 经 Android SAF 选择器，在 App 自己的上下文里跑 | 设备本地任意目录，无需 Termux |
 | **SSH** | 通过 `jsch` 连到配置的 SSH 主机 | 远端开发机 |
 | **Terminal Provider（IPC）** | 通过 **内置终端提供者**（随 APK 分发，跑在独立 `:terminal` 进程，无需额外安装），或任何第三方 Provider App（AIDL 绑定，仓库自带 `terminal-provider` 作为参考实现） | 零配置的独立进程本地 Shell；可插拔 —— 也可以发布自己的 Provider |
+| **Linux 环境**（Terminal Provider 子开关） | 内置终端 + proot + Alpine rootfs（约 4 MB 按需下载）：`shell_execute` 在完整 Alpine 用户态中执行，`apk add` 安装 git / node / python / gcc | 需要真实工具链而无需 Termux |
 
 三种模式都通过统一的 `IpcFileTreeStore` / `SshFileTreeStore` / `FileTreeStore` 接口暴露，所以文件树、附件选择器、模型看到的是同样的 UI，不管字节实际在哪里。
 

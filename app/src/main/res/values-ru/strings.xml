@@ -671,6 +671,14 @@
     <string name="screen_mcp_execution_terminal_provider_desc">Выполнять shell-команды и передавать файлы через встроенный терминал; можно также подключить внешнее приложение терминального провайдера</string>
     <string name="builtin_terminal_provider_name">Встроенный терминал</string>
     <string name="builtin_terminal_provider_badge">Встроенный · без установки</string>
+    <string name="screen_mcp_linux_section_title">Linux-среда</string>
+    <string name="screen_mcp_linux_desc">Выполняйте команды в среде Alpine Linux (proot) с менеджером пакетов apk — git, node, python, gcc устанавливаются по требованию. Первая настройка скачивает ~4 МБ.</string>
+    <string name="screen_mcp_linux_status_missing">Не установлена</string>
+    <string name="screen_mcp_linux_status_installing">Установка…</string>
+    <string name="screen_mcp_linux_status_installed">Установлена · shell-команды выполняются в Linux</string>
+    <string name="screen_mcp_linux_status_unsupported">proot не поддерживается на этом устройстве; команды выполняются в системном shell</string>
+    <string name="screen_mcp_linux_download">Скачать Linux-среду</string>
+    <string name="screen_mcp_linux_delete">Удалить Linux-среду</string>
 
     <string name="screen_ssh_title">SSH подключение</string>
     <string name="screen_ssh_section_server">Удалённый Linux / сервер</string>
@@ -805,6 +813,8 @@
     <string name="screen_storage_row_config">Файлы конфигурации</string>
     <string name="screen_storage_row_home">Домашний каталог</string>
     <string name="screen_storage_desc_home">Файлы проекта, Skills и данные расширений</string>
+    <string name="screen_storage_row_linux_rootfs">Linux-среда</string>
+    <string name="screen_storage_desc_linux_rootfs">Alpine rootfs, используемый Linux-средой (удаляется в настройках инструментов и выполнения)</string>
     <string name="screen_storage_desc_diff">Патчи и результаты сравнения, сгенерированные вызовами инструментов</string>
     <string name="screen_storage_desc_chat">Чаты, сообщения и индексные сводки</string>
     <string name="screen_storage_desc_config">Модели, тема, MCP и системные настройки</string>
@@ -976,6 +986,8 @@
 
     <string name="header_menu_desc">Меню</string>
     <string name="header_permission_desc">Разрешение</string>
+    <string name="header_model_default">Нет модели</string>
+    <string name="header_model_switch_desc">Переключить модель</string>
     <string name="header_new_conversation_desc">Новый разговор</string>
     <string name="header_more_desc">Ещё</string>
 

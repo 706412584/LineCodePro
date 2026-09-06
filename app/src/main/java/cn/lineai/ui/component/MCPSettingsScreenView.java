@@ -31,6 +31,12 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         void onOpenSshSettings();
 
         void onOpenTermuxIntegration();
+
+        void onLinuxEnvEnabledChanged(boolean enabled);
+
+        void onLinuxEnvInstallRequested();
+
+        void onLinuxEnvDeleteRequested();
     }
 
     private final Listener listener;
@@ -46,6 +52,9 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         addExecutionTarget(content);
         if (EXECUTION_SSH.equals(this.state.getExecutionMode())) {
             addSshConnection(content);
+        }
+        if (EXECUTION_TERMINAL_PROVIDER.equals(this.state.getExecutionMode())) {
+            addLinuxEnv(content);
         }
         addToolCards(content);
     }
@@ -100,6 +109,66 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         actionsParams.topMargin = LineTheme.dp(context, LineTheme.MD);
         card.addView(actions, actionsParams);
         addCard(content, card);
+    }
+
+    /** terminal_provider 模式下的「Linux 环境」卡片：开关 + 状态 + 安装/删除。 */
+    private void addLinuxEnv(LinearLayout content) {
+        Context context = content.getContext();
+        LinearLayout card = card(context);
+        card.addView(title(context, context.getString(R.string.screen_mcp_linux_section_title)));
+        card.addView(desc(context, context.getString(R.string.screen_mcp_linux_desc)));
+
+        Switch toggle = new Switch(context);
+        toggle.setChecked(state.isLinuxEnvEnabled());
+        tintSwitch(toggle, (button, checked) -> listener.onLinuxEnvEnabledChanged(checked));
+        card.addView(toggle, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+
+        String statusText = linuxStatusText(context);
+        TextView status = desc(context, statusText);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = LineTheme.dp(context, LineTheme.SM);
+        card.addView(status, statusParams);
+
+        String envState = state.getLinuxEnvState();
+        boolean installing = "installing".equals(envState);
+        if ("missing".equals(envState) || "unsupported".equals(envState)) {
+            LinearLayout install = actionButton(context,
+                    context.getString(R.string.screen_mcp_linux_download),
+                    IconButtonView.DOWNLOAD, true,
+                    v -> listener.onLinuxEnvInstallRequested());
+            if (installing) {
+                install.setClickable(false);
+                install.setAlpha(0.5f);
+            }
+            card.addView(install, buttonParams(context));
+        } else if ("installed".equals(envState)) {
+            LinearLayout delete = actionButton(context,
+                    context.getString(R.string.screen_mcp_linux_delete),
+                    IconButtonView.TRASH_2, false,
+                    v -> listener.onLinuxEnvDeleteRequested());
+            card.addView(delete, buttonParams(context));
+        }
+        addCard(content, card);
+    }
+
+    private String linuxStatusText(Context context) {
+        String envState = state.getLinuxEnvState();
+        if ("installing".equals(envState)) {
+            return context.getString(R.string.screen_mcp_linux_status_installing);
+        }
+        if ("installed".equals(envState)) {
+            return context.getString(R.string.screen_mcp_linux_status_installed);
+        }
+        if ("unsupported".equals(envState)) {
+            return context.getString(R.string.screen_mcp_linux_status_unsupported);
+        }
+        return context.getString(R.string.screen_mcp_linux_status_missing);
+    }
+
+    private LinearLayout.LayoutParams buttonParams(Context context) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LineTheme.dp(context, 42));
+        params.topMargin = LineTheme.dp(context, LineTheme.SM);
+        return params;
     }
 
     private void addToolCards(LinearLayout content) {

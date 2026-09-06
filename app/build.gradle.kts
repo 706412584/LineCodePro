@@ -115,6 +115,17 @@ android {
         targetSdk = 37
         versionCode = 32
         versionName = releaseVersionName
+        // proot 等非 JNI 命名的 so 需要 Android 10 安装器实际解压到 lib 目录
+        // （extractNativeLibs=false 时部分 ROM 不为无 loadLibrary 引用的 so 建链接）
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     signingConfigs {

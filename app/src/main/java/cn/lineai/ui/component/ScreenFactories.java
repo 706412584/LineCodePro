@@ -332,6 +332,23 @@ public final class ScreenFactories {
                 public void onOpenTermuxIntegration() {
                     controller.onSettingsItemSelected("termuxIntegration");
                 }
+
+                @Override
+                public void onLinuxEnvEnabledChanged(boolean enabled) {
+                    controller.onLinuxEnvEnabledChanged(enabled);
+                }
+
+                @Override
+                public void onLinuxEnvInstallRequested() {
+                    controller.onLinuxEnvInstallRequested();
+                    view.showScreen(currentScreenId(view));
+                }
+
+                @Override
+                public void onLinuxEnvDeleteRequested() {
+                    controller.onLinuxEnvDeleteRequested();
+                    view.showScreen(currentScreenId(view));
+                }
             });
         }
 

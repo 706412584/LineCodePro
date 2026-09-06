@@ -577,6 +577,14 @@
     <string name="screen_mcp_execution_terminal_provider_desc">通过内置终端执行 Shell 命令和传输文件，开箱即用；也可连接外部终端提供者应用</string>
     <string name="builtin_terminal_provider_name">内置终端</string>
     <string name="builtin_terminal_provider_badge">内置 · 无需安装</string>
+    <string name="screen_mcp_linux_section_title">Linux 环境</string>
+    <string name="screen_mcp_linux_desc">在 Alpine Linux 环境（proot）中执行命令，内置 apk 包管理器——git、node、python、gcc 等按需安装。首次配置约下载 4 MB。</string>
+    <string name="screen_mcp_linux_status_missing">未安装</string>
+    <string name="screen_mcp_linux_status_installing">安装中…</string>
+    <string name="screen_mcp_linux_status_installed">已安装 · shell 命令在 Linux 中执行</string>
+    <string name="screen_mcp_linux_status_unsupported">此设备不支持 proot，命令将回退到系统 shell</string>
+    <string name="screen_mcp_linux_download">下载 Linux 环境</string>
+    <string name="screen_mcp_linux_delete">删除 Linux 环境</string>
     <string name="screen_mcp_execution_desc">选择工具调用的执行环境</string>
     <string name="screen_mcp_section_ssh">SSH 连接</string>
     <string name="screen_mcp_ssh_desc">连接远程 Linux 服务器并将其作为执行目标</string>
@@ -805,6 +813,8 @@
     <string name="screen_storage_row_config">配置文件</string>
     <string name="screen_storage_row_home">Home 目录</string>
     <string name="screen_storage_desc_home">项目文件、Skills 和扩展数据</string>
+    <string name="screen_storage_row_linux_rootfs">Linux 环境</string>
+    <string name="screen_storage_desc_linux_rootfs">Linux 环境使用的 Alpine rootfs（在工具与执行设置中删除）</string>
     <string name="screen_storage_desc_diff">工具调用生成的补丁和比较结果</string>
     <string name="screen_storage_desc_chat">聊天、消息和索引摘要</string>
     <string name="screen_storage_desc_config">模型、主题、MCP 和系统设置</string>
@@ -977,6 +987,8 @@
 
     <string name="header_menu_desc">菜单</string>
     <string name="header_permission_desc">权限</string>
+    <string name="header_model_default">未选模型</string>
+    <string name="header_model_switch_desc">切换模型</string>
     <string name="header_new_conversation_desc">新建对话</string>
     <string name="header_more_desc">更多</string>
 

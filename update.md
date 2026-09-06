@@ -9,6 +9,15 @@
 - **共享 Binder 抽取** - `TerminalProviderService` 的 AIDL 实现整体迁入 `:ipc` 模块 `TerminalProviderBinder`，主 App 内置 Service 与示例 `terminal-provider` 应用共用同一实现，消除双份维护
 - **UI 与多语言** - 终端提供者管理页为内置条目显示「内置 · 无需安装」徽章且屏蔽长按删除；执行目标说明文案同步更新（中 / 英 / 俄）
 
+### Linux 环境（proot + Alpine）
+
+- **完整工具链按需安装** - 终端提供者模式下新增「Linux 环境」子开关：开启后 `shell_execute` 在 Alpine Linux（proot）中执行，`apk add git nodejs python3 gcc` 即可获得完整工具链；AI 提示词同步告知使用 `apk`（而非 apt）
+- **proot 静态二进制内置** - proot（含 loader、libtalloc、libandroid-shmem）从 Termux 官方包仓库提取，以 `jniLibs/<abi>/lib*.so` 随 APK 分发（约 +1 MB），仅在 `nativeLibraryDir` 执行，不触碰 W^X 限制
+- **rootfs 按需下载** - Alpine minirootfs（约 4 MB）首次使用时从官方 CDN 下载并做 sha256 校验，解压至应用私有目录；存储维护页可见占用并支持删除重装
+- **兼容性探测与回退** - 安装后实测 proot 可用性（个别 ROM 的 seccomp/SELinux 策略可能拒绝）；不支持时设置页标注并自动回退系统 shell，附提示行
+- **零 AIDL 改动** - proot 包装命令在 `TerminalIpcProvider` 调用方构造（`LD_LIBRARY_PATH`/`PROOT_LOADER` 环境变量前缀 + `-R` rootfs + `-b /storage` 绑定），外部 Provider 应用完全无感
+- **路径语义保持** - guest 内绑定 `/storage` 与 `/sdcard`，工作区路径（如 `/storage/emulated/0/...`）在 Linux 环境内原样可用，AI 无需感知差异
+
 ## v1.2.8-max
 
 ### 原生 UI 与聊天布局重写

@@ -155,6 +155,8 @@
     <string name="tool_shell_ipc_not_init">终端提供者管理器未初始化。</string>
     <string name="tool_shell_no_provider">没有已绑定的终端提供者。请在设置中添加并启用终端提供者。</string>
     <string name="tool_shell_provider_not_bound">终端提供者服务未绑定。</string>
+    <string name="tool_shell_linux_not_installed">Linux 环境已开启但尚未安装。请到 设置 → 工具与执行 → Linux 环境 下载安装。</string>
+    <string name="tool_shell_linux_fallback_notice">[此设备不支持 Linux 环境，已回退到系统 shell]</string>
     <string name="tool_shell_exec_failed_exit">命令执行失败，退出码: %1$d</string>
     <string name="tool_shell_exec_no_output">命令执行完成，无输出</string>
     <string name="tool_shell_exec_failed">命令执行失败: %1$s</string>

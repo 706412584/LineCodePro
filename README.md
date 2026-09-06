@@ -256,6 +256,7 @@ LineCode has three execution modes for shell and file tools. You can switch betw
 | **Local** | Through the Android SAF picker, in the app's own context. | Picking arbitrary folders on the device, no Termux required. |
 | **SSH** | Through `jsch` against an SSH host you configured. | Working on a remote dev box. |
 | **Terminal Provider (IPC)** | Through the **built-in terminal provider** (shipped in the APK, runs in an isolated `:terminal` process — no extra install), or any third-party provider app bound over AIDL (the bundled `terminal-provider` is the reference implementation). | Zero-setup local shell in a separate process; pluggable — you can also ship your own provider. |
+| **Linux environment** (Terminal Provider sub-toggle) | Built-in terminal + proot + Alpine rootfs (~4 MB on-demand download): `shell_execute` runs inside a full Alpine userland; `apk add` installs git / node / python / gcc. | Real toolchains without Termux. |
 
 Each mode exposes a consistent `IpcFileTreeStore` / `SshFileTreeStore` / `FileTreeStore` interface, so the file tree, the attachment picker, and the model all see the same UI regardless of where bytes actually live.
 

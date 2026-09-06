@@ -4,6 +4,7 @@ import android.os.RemoteException;
 import cn.lineai.ipc.BaseIpcProvider;
 import cn.lineai.ipc.IpcProviderConfig;
 import cn.lineai.ipc.IpcProviderType;
+import java.io.File;
 import org.json.JSONObject;
 
 public final class TerminalIpcProvider extends BaseIpcProvider {
@@ -27,6 +28,36 @@ public final class TerminalIpcProvider extends BaseIpcProvider {
             throw new IllegalStateException("终端提供者服务未绑定");
         }
         return ITerminalProviderService.Stub.asInterface(serviceBinder);
+    }
+
+    /**
+     * 在 proot + Alpine rootfs 内执行命令。
+     *
+     * <p>命令经 {@link ProotCommandBuilder} 包装后仍走现有 {@code executeShell}
+     * AIDL 通道（零 AIDL 改动，外部 provider 无感）。</p>
+     */
+    public TerminalShellResult executeShellInLinux(String command, String cwd, long timeoutMs,
+                                                   String prootBin, File rootfsDir,
+                                                   TerminalShellCallback callback) throws RemoteException {
+        String wrapped = ProotCommandBuilder.build(prootBin, rootfsDir, cwd, command);
+        // cwd 交给 proot -w 参数（guest 路径），host 侧工作目录用 provider 默认
+        return executeShell(wrapped, "", timeoutMs, callback);
+    }
+
+    /**
+     * 探测当前设备是否支持 proot（SELinux/seccomp 兼容性）。
+     *
+     * @return true 表示 guest 内 busybox 可执行
+     */
+    public boolean probeProot(String prootBin, File rootfsDir) {
+        try {
+            TerminalShellResult result = executeShell(
+                    ProotCommandBuilder.build(prootBin, rootfsDir, "", "busybox echo __lineai_proot_ok__"),
+                    "", 15000L, null);
+            return result.isSuccess();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public TerminalShellResult executeShell(String command, String cwd, long timeoutMs,

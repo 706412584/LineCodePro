@@ -3,9 +3,11 @@ import cn.lineai.model.tool.ToolResult;
 
 import android.content.Context;
 import cn.lineai.data.repository.ToolSettingsStore;
-import cn.lineai.data.repository.ToolSettingsStore;
+import cn.lineai.ipc.IpcProviderConfig;
 import cn.lineai.ipc.IpcProviderManager;
 import cn.lineai.ipc.IpcProviderType;
+import cn.lineai.ipc.terminal.LinuxRootfsLayout;
+import cn.lineai.ipc.terminal.ProotCommandBuilder;
 import cn.lineai.ipc.terminal.TerminalIpcProvider;
 import cn.lineai.ipc.terminal.TerminalShellCallback;
 import cn.lineai.ipc.terminal.TerminalShellResult;
@@ -16,6 +18,7 @@ import cn.lineai.tool.R;
 import cn.lineai.tool.ToolCategory;
 import cn.lineai.tool.ToolContext;
 import cn.lineai.tool.ToolDisplayCategory;
+import java.io.File;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -68,7 +71,8 @@ public final class ShellExecuteTool extends BaseTool {
         if (isSsh) {
             return "shell_execute runs in the current workspace directory by default; set cwd explicitly to switch temporarily.";
         }
-        return "shell_execute runs via the terminal provider IPC; it runs in the current workspace directory by default; set cwd explicitly to switch temporarily.";
+        return "shell_execute runs via the terminal provider IPC; it runs in the current workspace directory by default; set cwd explicitly to switch temporarily. "
+                + "When the Linux environment toggle is enabled, commands run in an Alpine proot environment with apk available; install packages with `apk add <pkg>` (not apt).";
     }
 
     @Override
@@ -131,7 +135,99 @@ public final class ShellExecuteTool extends BaseTool {
         if (!provider.isBound()) {
             return error(context.getString(R.string.tool_shell_provider_not_bound));
         }
+        // Linux 环境路由：仅内置 provider + 开关开启时生效
+        ToolSettingsStore settings = resolveSettings(context);
+        if (settings != null
+                && settings.isLinuxEnvEnabled()
+                && context != null
+                && context.getAndroidContext() != null
+                && IpcProviderConfig.BUILT_IN_ID.equals(provider.getConfig().getId())) {
+            ToolResult linuxResult = executeViaLinux(provider, command, cwd, timeoutMs, context);
+            if (linuxResult != null) {
+                return linuxResult;
+            }
+            // proot 失败 → 回退系统 shell，输出附提示
+            ToolResult fallback = executeViaTerminalProvider(command, cwd, timeoutMs, context, provider, false);
+            return ToolResult.of(
+                    fallback.getToolCallId(),
+                    fallback.getToolName(),
+                    context.getString(R.string.tool_shell_linux_fallback_notice) + "\n" + fallback.getContent(),
+                    fallback.isError());
+        }
+        return executeViaTerminalProvider(command, cwd, timeoutMs, context, provider, true);
+    }
+
+    /**
+     * Linux（proot）路径。返回 null 表示 proot 不可用（未安装/不支持/执行失败），
+     * 调用方回退系统 shell。
+     */
+    private ToolResult executeViaLinux(TerminalIpcProvider provider, String command, String cwd,
+                                       long timeoutMs, ToolContext context) {
+        android.content.Context appContext = context.getAndroidContext();
+        java.io.File filesDir = appContext.getFilesDir();
+        LinuxRootfsLayout.Meta meta = LinuxRootfsLayout.readMeta(filesDir);
+        if (meta == null || !LinuxRootfsLayout.isInstalled(filesDir)) {
+            return error(context.getString(R.string.tool_shell_linux_not_installed));
+        }
+        if (!meta.prootSupported) {
+            return null;
+        }
+        String prootBin = new File(appContext.getApplicationInfo().nativeLibraryDir, "libproot.so")
+                .getAbsolutePath();
+        if (!new File(prootBin).exists()) {
+            return null;
+        }
+        try {
+            // 幂等：SONAME 链接 + PROOT_TMP_DIR 目录缺失时自愈
+            ProotCommandBuilder.ensureRuntimeLayout(prootBin, LinuxRootfsLayout.rootfsDir(filesDir));
+        } catch (java.io.IOException layoutError) {
+            return null;
+        }
         if (context != null) {
+            context.reportToolProgress(getName(), "", false);
+        }
+        StringBuilder streamedOutput = new StringBuilder();
+        try {
+            TerminalShellResult result = provider.executeShellInLinux(
+                    command, cwd, timeoutMs, prootBin, LinuxRootfsLayout.rootfsDir(filesDir),
+                    new TerminalShellCallback() {
+                        @Override
+                        public void onOutput(String content) {
+                            synchronized (streamedOutput) {
+                                streamedOutput.append(content == null ? "" : content);
+                            }
+                            if (context != null) {
+                                context.reportToolProgress(getName(), content, false);
+                            }
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                        }
+
+                        @Override
+                        public void onComplete(int exitCode) {
+                        }
+                    });
+            String output = streamedOutput.toString().trim();
+            if (!result.isSuccess()) {
+                // proot 启动失败（如 seccomp 拒绝）→ 回退
+                return null;
+            }
+            if (output.length() == 0) {
+                return ok(context.getString(R.string.tool_shell_exec_no_output));
+            }
+            return ok(truncateOutput(output, context));
+        } catch (Exception e) {
+            restoreInterrupt(e);
+            return null;
+        }
+    }
+
+    private ToolResult executeViaTerminalProvider(String command, String cwd, long timeoutMs,
+                                                  ToolContext context, TerminalIpcProvider provider,
+                                                  boolean allowProgress) {
+        if (allowProgress && context != null) {
             context.reportToolProgress(getName(), "", false);
         }
         StringBuilder streamedOutput = new StringBuilder();

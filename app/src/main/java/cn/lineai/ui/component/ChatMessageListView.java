@@ -36,6 +36,7 @@ import java.util.Set;
 
 public final class ChatMessageListView extends FrameLayout {
     private static final int MULTI_SELECT_BAR_EXTRA_PADDING = 64;
+    private static final long TAIL_SCROLL_DEBOUNCE_MS = 120L;
 
     private final ListView listView;
     private final MessageAdapter adapter;
@@ -63,6 +64,7 @@ public final class ChatMessageListView extends FrameLayout {
 
         adapter = new MessageAdapter(context);
         listView = new TouchAwareListView(context);
+        adapter.attachListView(listView);
         listView.setAdapter(adapter);
         listView.setBackgroundColor(LineTheme.BG);
         listView.setCacheColorHint(Color.TRANSPARENT);
@@ -85,6 +87,13 @@ public final class ChatMessageListView extends FrameLayout {
         refreshScrollToBottomButtonStyle();
         scrollToBottomButton.setVisibility(GONE);
         scrollToBottomButton.setOnClickListener(v -> scrollToBottom());
+        tailScrollRunnable = () -> {
+            if (followTailEnabled && adapter.getCount() > 0) {
+                scrollToBottomInternal(false);
+            } else {
+                updateScrollToBottomVisibility();
+            }
+        };
         scrollToBottomButton.setElevation(LineTheme.dp(context, 8));
         FrameLayout.LayoutParams buttonParams = new FrameLayout.LayoutParams(
                 LineTheme.dp(context, 44),
@@ -125,14 +134,42 @@ public final class ChatMessageListView extends FrameLayout {
         });
     }
 
+    /** 流式尾随滚动去抖：合并同帧多次 render 的滚动请求。构造体内初始化（依赖 adapter）。 */
+    private Runnable tailScrollRunnable;
+    private DiffResult lastDiff;
+
+    /** render 的 diff 结果：驱动滚动与局部重绑策略，亦供测试观测。 */
+    public static final class DiffResult {
+        public final boolean conversationChanged;
+        public final boolean structural;
+        public final List<String> changedIds;
+
+        DiffResult(boolean conversationChanged, boolean structural, List<String> changedIds) {
+            this.conversationChanged = conversationChanged;
+            this.structural = structural;
+            this.changedIds = changedIds;
+        }
+    }
+
+    /** 最近一次 render 的 diff 结果（供测试与调试观测）。 */
+    public DiffResult lastDiff() {
+        return lastDiff;
+    }
+
     public void render(ChatUiState state) {
         refreshScrollToBottomButtonStyle();
-        boolean conversationChanged = adapter.render(state);
-        if (conversationChanged) {
+        DiffResult diff = adapter.render(state);
+        lastDiff = diff;
+        if (diff.conversationChanged) {
             followTailEnabled = true;
         }
-        if (followTailEnabled && adapter.getCount() > 0) {
-            listView.post(() -> scrollToBottomInternal(false));
+        if (diff.structural || diff.conversationChanged) {
+            // 结构变化：布局即将重排，下一帧直接对齐底部
+            listView.post(tailScrollRunnable);
+        } else if (!diff.changedIds.isEmpty() && followTailEnabled) {
+            // 局部重绑：120ms 去抖，避免流式期间连续跳变
+            removeCallbacks(tailScrollRunnable);
+            postDelayed(tailScrollRunnable, TAIL_SCROLL_DEBOUNCE_MS);
         } else {
             listView.post(this::updateScrollToBottomVisibility);
         }
@@ -303,23 +340,34 @@ public final class ChatMessageListView extends FrameLayout {
             return;
         }
         int target = count - 1;
-        listView.setSelection(target);
-        listView.post(() -> {
-            int childIndex = target - listView.getFirstVisiblePosition();
-            if (childIndex >= 0 && childIndex < listView.getChildCount()) {
-                View child = listView.getChildAt(childIndex);
-                int viewportBottom = listView.getHeight() - listView.getPaddingBottom();
-                int delta = child.getBottom() - viewportBottom;
-                if (delta > 0) {
-                    if (animated) {
+        // 单跳对齐：直接以末行为锚从视口底部起排，避免 setSelection + setSelectionFromTop 双跳闪烁
+        if (animated) {
+            listView.setSelection(target);
+            listView.post(() -> {
+                int childIndex = target - listView.getFirstVisiblePosition();
+                if (childIndex >= 0 && childIndex < listView.getChildCount()) {
+                    View child = listView.getChildAt(childIndex);
+                    int viewportBottom = listView.getHeight() - listView.getPaddingBottom();
+                    int delta = child.getBottom() - viewportBottom;
+                    if (delta > 0) {
                         listView.smoothScrollBy(delta, 180);
-                    } else {
-                        listView.setSelectionFromTop(target, viewportBottom - child.getHeight());
                     }
                 }
-            }
-            updateScrollToBottomVisibility();
-        });
+                updateScrollToBottomVisibility();
+            });
+        } else {
+            listView.post(() -> {
+                int childIndex = target - listView.getFirstVisiblePosition();
+                if (childIndex >= 0 && childIndex < listView.getChildCount()) {
+                    View child = listView.getChildAt(childIndex);
+                    int viewportBottom = listView.getHeight() - listView.getPaddingBottom();
+                    listView.setSelectionFromTop(target, viewportBottom - child.getHeight());
+                } else {
+                    listView.setSelection(target);
+                }
+                updateScrollToBottomVisibility();
+            });
+        }
     }
 
     private void updateScrollToBottomVisibility() {
@@ -445,6 +493,7 @@ public final class ChatMessageListView extends FrameLayout {
         private static final int VIEW_TYPE_NOTICE = 3;
 
         private final Context context;
+        private AbsListView listView;
         private final ArrayList<ChatMessage> visibleMessages = new ArrayList<>();
         private final LinkedHashMap<String, View> rowCache = new LinkedHashMap<>(32, 0.75f, true);
         private boolean showConfigureState;
@@ -468,7 +517,12 @@ public final class ChatMessageListView extends FrameLayout {
             this.context = context;
         }
 
-        boolean render(ChatUiState state) {
+        /** 构造后绑定宿主 ListView（构造 adapter 时 ListView 尚未创建）。 */
+        void attachListView(AbsListView view) {
+            listView = view;
+        }
+
+        DiffResult render(ChatUiState state) {
             ArrayList<ChatMessage> nextMessages = new ArrayList<>();
             if (state != null) {
                 List<ChatMessage> messages = state.getMessages();
@@ -504,25 +558,35 @@ public final class ChatMessageListView extends FrameLayout {
             String nextProjectPath = state == null ? "" : state.getProjectPath();
             boolean conversationChanged = !stringEquals(conversationId, nextConversationId);
 
-            if (generating == (state != null && state.isStreaming())
+            boolean flagsUnchanged = generating == (state != null && state.isStreaming())
                     && showConfigureState == nextShowConfigureState
                     && thinkingAutoExpand == nextThinkingAutoExpand
                     && thinkingScroll == nextThinkingScroll
                     && processAutoExpand == nextProcessAutoExpand
                     && codeWrapEnabled == nextCodeWrapEnabled
                     && stringEquals(conversationId, nextConversationId)
-                    && stringEquals(projectPath, nextProjectPath)
-                    && sameMessages(nextMessages)) {
-                return false;
+                    && stringEquals(projectPath, nextProjectPath);
+            if (flagsUnchanged && sameMessages(nextMessages)) {
+                return new DiffResult(false, false, java.util.Collections.emptyList());
             }
 
+            // 结构 diff：id 序列与行类型完全一致才允许局部重绑，否则全量刷新。
+            List<ConversationTimeline.Row> nextTimeline = ConversationTimeline.build(nextMessages);
+            boolean structural = timelineStructureChanged(nextTimeline)
+                    || multiSelectMode
+                    || conversationChanged
+                    || showConfigureState != nextShowConfigureState
+                    || !flagsUnchanged;
+            List<String> changedIds = structural
+                    ? java.util.Collections.emptyList()
+                    : changedRowIds(nextTimeline);
+
             if (conversationChanged) {
-                rowCache.clear();
                 disclosure.clear();
             }
             visibleMessages.clear();
             visibleMessages.addAll(nextMessages);
-            timeline = ConversationTimeline.build(visibleMessages);
+            timeline = nextTimeline;
             generating = state != null && state.isStreaming();
             showConfigureState = nextShowConfigureState;
             thinkingAutoExpand = nextThinkingAutoExpand;
@@ -532,8 +596,147 @@ public final class ChatMessageListView extends FrameLayout {
             conversationId = nextConversationId;
             projectPath = nextProjectPath;
             pruneCache();
-            notifyDataSetChanged();
-            return conversationChanged;
+
+            if (structural || !rebindVisibleRows(changedIds)) {
+                notifyDataSetChanged();
+            }
+            return new DiffResult(conversationChanged, structural, changedIds);
+        }
+
+        /** 行 id 序列或任一行视图类型变化 → 结构变化（ListView 位置语义变，须全量刷新）。 */
+        private boolean timelineStructureChanged(List<ConversationTimeline.Row> next) {
+            if (timeline.size() != next.size()) {
+                return true;
+            }
+            for (int i = 0; i < next.size(); i++) {
+                ChatMessage oldFirst = timeline.get(i).first;
+                ChatMessage newFirst = next.get(i).first;
+                if (!stringEquals(oldFirst.getId(), newFirst.getId())) {
+                    return true;
+                }
+                if (rowViewType(timeline.get(i)) != rowViewType(next.get(i))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private int rowViewType(ConversationTimeline.Row row) {
+            if (row.isTurn) {
+                return 4;
+            }
+            ChatMessage first = row.first;
+            if (first.isModelSwitchNotification()) {
+                return VIEW_TYPE_NOTICE;
+            }
+            return first.getRole() == ChatMessage.Role.USER ? VIEW_TYPE_USER : VIEW_TYPE_ASSISTANT;
+        }
+
+        /** 非结构前提下，收集内容发生变化的行 id。 */
+        private List<String> changedRowIds(List<ConversationTimeline.Row> next) {
+            List<String> changed = new ArrayList<>();
+            for (int i = 0; i < next.size(); i++) {
+                if (!sameMessage(timeline.get(i).first, next.get(i).first)) {
+                    changed.add(next.get(i).first.getId());
+                }
+            }
+            return changed;
+        }
+
+        /**
+         * 局部重绑：对每个变化行，在 ListView 当前可见 child 中按 id 定位并重调 bind，
+         * 不触发 ListView 全量 relayout。任一行未命中可见 child（在屏幕外）时返回 false
+         * 交由调用方退回 notifyDataSetChanged（离屏行会被 ListView 按需重建）。
+         */
+        private boolean rebindVisibleRows(List<String> changedIds) {
+            if (changedIds.isEmpty()) {
+                return true;
+            }
+            if (listView == null) {
+                return false;
+            }
+            int firstVisible = listView.getFirstVisiblePosition();
+            int childCount = listView.getChildCount();
+            for (String id : changedIds) {
+                boolean rebound = false;
+                for (int i = 0; i < childCount; i++) {
+                    int position = firstVisible + i;
+                    if (position >= timeline.size()) {
+                        break;
+                    }
+                    ConversationTimeline.Row row = timeline.get(position);
+                    if (!stringEquals(row.first.getId(), id)) {
+                        continue;
+                    }
+                    View child = listView.getChildAt(i);
+                    if (!isRowViewFor(row, child)) {
+                        return false; // 类型不匹配（不应发生，防御）→ 全量
+                    }
+                    bindRowView(child, position);
+                    rebound = true;
+                    break;
+                }
+                if (!rebound) {
+                    return false;
+                }
+            }
+            requestLayoutOnChangedRows(changedIds);
+            return true;
+        }
+
+        private boolean isRowViewFor(ConversationTimeline.Row row, View view) {
+            if (row.isTurn) {
+                return view instanceof AssistantTurnView;
+            }
+            if (row.first.isModelSwitchNotification()) {
+                return true; // notice 为简单构建视图，无 bind 幂等保障，结构 diff 已确保类型一致
+            }
+            return row.first.getRole() == ChatMessage.Role.USER
+                    ? view instanceof UserMessageView
+                    : view instanceof AssistantMessageView;
+        }
+
+        /** 行内容变化可能改变行高：只对受影响行触发 measure/layout。 */
+        private void requestLayoutOnChangedRows(List<String> changedIds) {
+            int firstVisible = listView.getFirstVisiblePosition();
+            for (int i = 0; i < listView.getChildCount(); i++) {
+                int position = firstVisible + i;
+                if (position >= timeline.size()) {
+                    break;
+                }
+                if (changedIds.contains(timeline.get(position).first.getId())) {
+                    listView.getChildAt(i).requestLayout();
+                }
+            }
+        }
+
+        /** 把 getView 内的 bind 调用收敛到一处，供 getView 与局部重绑共用。 */
+        private void bindRowView(View view, int position) {
+            ChatMessage message = messageAt(position);
+            if (!multiSelectMode && timeline.get(position).isTurn) {
+                ((AssistantTurnView) view).bind(timeline.get(position), disclosure, projectPath,
+                        toolReviewListener, markdownLinkHandler, messageActionListener,
+                        codeWrapEnabled, generating && position == timeline.size() - 1, processAutoExpand);
+                return;
+            }
+            if (message.isModelSwitchNotification()) {
+                return; // notice 无状态可更新
+            }
+            boolean isUser = message.getRole() == ChatMessage.Role.USER;
+            if (isUser && view instanceof UserMessageView) {
+                UserMessageView rowView = (UserMessageView) view;
+                rowView.setMessageActionListener(messageActionListener);
+                rowView.bind(message);
+                applyMultiSelectStyle(rowView, message);
+            } else if (!isUser && view instanceof AssistantMessageView) {
+                AssistantMessageView rowView = (AssistantMessageView) view;
+                rowView.setToolReviewListener(toolReviewListener);
+                rowView.setMarkdownLinkHandler(markdownLinkHandler);
+                rowView.setMessageActionListener(messageActionListener);
+                rowView.setProjectPath(projectPath);
+                rowView.bind(message, thinkingAutoExpand, thinkingScroll, codeWrapEnabled);
+                applyMultiSelectStyle(rowView, message);
+            }
         }
 
         @Override

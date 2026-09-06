@@ -1,6 +1,7 @@
 package cn.lineai.mvp;
 
 import android.content.Context;
+import android.os.Looper;
 import android.widget.Toast;
 import cn.lineai.R;
 import cn.lineai.ai.ModelCancellationToken;
@@ -564,6 +565,31 @@ final class MainControllerInitializer {
                     }
                 }
         );
+        coordinator.linuxEnvironmentController = new LinuxEnvironmentController(
+                context,
+                toolSettingsRepository,
+                dependencies.ipcProviderManager,
+                backgroundTasks,
+                new LinuxEnvironmentController.Host() {
+                    @Override
+                    public void refreshLinuxEnvUi() {
+                        if (coordinator.isTerminalProviderExecutionMode()) {
+                            coordinator.refreshVisibleScreen("mcp");
+                        }
+                        coordinator.render();
+                    }
+
+                    @Override
+                    public void postToMainThread(Runnable action) {
+                        mainThread.post(action);
+                    }
+
+                    @Override
+                    public boolean isMainThread() {
+                        return Looper.myLooper() == Looper.getMainLooper();
+                    }
+                }
+        );
         coordinator.agentExecutionController = new AgentExecutionController(
                 modelClient,
                 aiBehaviorSettingsRepository,
@@ -598,6 +624,8 @@ final class MainControllerInitializer {
         java.util.function.BooleanSupplier bypassSupplier = () -> outputSettingsRepository.isPathProtectionBypassed();
         coordinator.agentExecutionController.setBypassPathProtectionSupplier(bypassSupplier);
         coordinator.generationFlowController.setBypassPathProtectionSupplier(bypassSupplier);
+        coordinator.generationFlowController.setHostAppContextSupplier(() -> context.getApplicationContext());
+        coordinator.agentExecutionController.setContext(context.getApplicationContext());
         coordinator.chatInteractionController = new ChatInteractionController(
                 messages,
                 chatSessionStore,

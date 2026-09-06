@@ -10,7 +10,7 @@ import cn.lineai.model.ChatUiState;
 import cn.lineai.ui.theme.IconButtonView;
 import cn.lineai.ui.theme.LineTheme;
 
-/** Conversation navigation and the current workspace selector. */
+/** Conversation navigation, the current workspace selector and quick model switching. */
 public final class HeaderView extends LinearLayout {
     public interface Listener {
         void onMenuClick();
@@ -18,10 +18,13 @@ public final class HeaderView extends LinearLayout {
         void onPermissionClick();
         void onNewConversationClick();
         void onMoreClick();
+        void onModelClick();
     }
     private Listener listener;
     private final LinearLayout brand;
     private final TextView projectText;
+    private final LinearLayout modelChip;
+    private final TextView modelText;
 
     public HeaderView(Context context) {
         super(context);
@@ -53,6 +56,30 @@ public final class HeaderView extends LinearLayout {
         chevron.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         brand.addView(chevron, new LayoutParams(LineTheme.dp(context, 24), LineTheme.dp(context, 32)));
         addView(brand, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
+
+        // 模型快速切换胶囊：显示当前模型名，点击弹出选择器
+        modelChip = new LinearLayout(context);
+        modelChip.setOrientation(HORIZONTAL);
+        modelChip.setGravity(Gravity.CENTER_VERTICAL);
+        modelChip.setFocusable(true);
+        modelChip.setBackground(LineTheme.rounded(context, LineTheme.SURFACE_LIGHT, 14));
+        LineTheme.padding(modelChip, 10, 0, 6, 0);
+        modelChip.setMinimumHeight(LineTheme.dp(context, 30));
+        modelChip.setOnClickListener(v -> { if (listener != null) listener.onModelClick(); });
+        modelText = LineTheme.text(context, context.getString(R.string.header_model_default), LineTheme.FONT_XS, LineTheme.TEXT_SECONDARY, android.graphics.Typeface.BOLD);
+        modelText.setSingleLine(true);
+        modelText.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        modelText.setMaxWidth(LineTheme.dp(context, 96));
+        modelChip.addView(modelText, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+        IconButtonView modelChevron = new IconButtonView(context, IconButtonView.CHEVRON_DOWN);
+        modelChevron.setIconSizeDp(18, 12);
+        modelChevron.setIconColor(LineTheme.TEXT_TERTIARY);
+        modelChevron.setClickable(false);
+        modelChevron.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        modelChip.addView(modelChevron, new LayoutParams(LineTheme.dp(context, 18), LineTheme.dp(context, 28)));
+        modelChip.setContentDescription(context.getString(R.string.header_model_switch_desc));
+        addView(modelChip, new LayoutParams(LayoutParams.WRAP_CONTENT, LineTheme.dp(context, 32)));
+
         IconButtonView permissions = new IconButtonView(context, IconButtonView.SHIELD);
         permissions.setIconSizeDp(40, 19);
         permissions.setIconColor(LineTheme.TEXT_SECONDARY);
@@ -75,12 +102,16 @@ public final class HeaderView extends LinearLayout {
     public void setListener(Listener listener) { this.listener = listener; }
     @Override protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
-        projectText.setMaxWidth(Math.max(0, width - getPaddingLeft() - getPaddingRight() - LineTheme.dp(getContext(), 184)));
+        projectText.setMaxWidth(Math.max(0, width - getPaddingLeft() - getPaddingRight() - LineTheme.dp(getContext(), 250)));
     }
     public void render(ChatUiState state) {
         String label = state.getProjectLabel();
         if (label == null || label.isEmpty()) label = getContext().getString(R.string.header_project_default);
         projectText.setText(label);
         brand.setContentDescription(label);
+
+        String modelLabel = state.getModelLabel();
+        modelChip.setVisibility(modelLabel == null || modelLabel.isEmpty() ? GONE : VISIBLE);
+        modelText.setText(modelLabel == null ? "" : modelLabel);
     }
 }

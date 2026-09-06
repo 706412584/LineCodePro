@@ -155,6 +155,8 @@
     <string name="tool_shell_ipc_not_init">Terminal provider manager not initialized.</string>
     <string name="tool_shell_no_provider">No bound terminal provider. Please add and enable one in settings.</string>
     <string name="tool_shell_provider_not_bound">Terminal provider service not bound.</string>
+    <string name="tool_shell_linux_not_installed">The Linux environment is enabled but not installed yet. Open Settings → Tools &amp; execution → Linux environment to download it.</string>
+    <string name="tool_shell_linux_fallback_notice">[Linux environment unavailable on this device, falling back to the system shell]</string>
     <string name="tool_shell_exec_failed_exit">Command execution failed, exit code: %1$d</string>
     <string name="tool_shell_exec_no_output">Command executed with no output</string>
     <string name="tool_shell_exec_failed">Command execution failed: %1$s</string>

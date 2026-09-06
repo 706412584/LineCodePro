@@ -36,6 +36,7 @@ public final class StorageManagementScreenView extends ScreenScaffoldView {
     private TextView configCountView;
     private TextView homeSizeView;
     private TextView homeCountView;
+    private TextView linuxRootfsSizeView;
 
     public StorageManagementScreenView(Context context, Listener listener) {
         super(context, context.getString(R.string.screen_storage_title), listener::onBack, createRefreshButton(context));
@@ -83,6 +84,10 @@ public final class StorageManagementScreenView extends ScreenScaffoldView {
         homeSizeView = (TextView) ((LinearLayout) homeRow.getChildAt(2)).getChildAt(0);
         homeCountView = (TextView) ((LinearLayout) homeRow.getChildAt(2)).getChildAt(1);
         content.addView(homeRow, createRowParams());
+
+        LinearLayout linuxRow = createStorageRow(IconButtonView.TERMINAL, context.getString(R.string.screen_storage_row_linux_rootfs), context.getString(R.string.screen_storage_desc_linux_rootfs));
+        linuxRootfsSizeView = (TextView) ((LinearLayout) linuxRow.getChildAt(2)).getChildAt(0);
+        content.addView(linuxRow, createRowParams());
 
         loadStats();
     }
@@ -158,6 +163,7 @@ public final class StorageManagementScreenView extends ScreenScaffoldView {
         configCountView.setText(stats.getConfigCount() + context.getString(R.string.screen_storage_unit_items));
         homeSizeView.setText(stats.formatHomeSize());
         homeCountView.setText(stats.getHomeCount() + context.getString(R.string.screen_storage_unit_items));
+        linuxRootfsSizeView.setText(stats.formatLinuxRootfsSize());
     }
 
     public void refresh() {
