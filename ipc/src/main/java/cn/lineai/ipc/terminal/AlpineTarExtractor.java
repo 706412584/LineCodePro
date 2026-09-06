@@ -128,12 +128,21 @@ public final class AlpineTarExtractor {
     private static void createSymlink(String target, File link) throws IOException {
         try {
             Os.symlink(target, link.getAbsolutePath());
-        } catch (Exception e) {
-            // 个别文件系统不支持 symlink（如 FAT）：降级为内容为目标的普通文件
+            return;
+        } catch (Exception primary) {
+            // 降级：内容为目标路径的普通文件（个别文件系统/ROM 拒绝 symlink）。
+            // 父目录可能尚未随 tar 目录 entry 创建（entry 顺序不保证），先补齐。
+            File parent = link.getParentFile();
+            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                throw new IOException("symlink failed (cannot create parent): " + link
+                        + " cause: " + primary, primary);
+            }
             try (OutputStream output = new FileOutputStream(link)) {
                 output.write(target.getBytes(StandardCharsets.UTF_8));
-            } catch (IOException ignored) {
-                throw new IOException("symlink failed: " + link, e);
+            } catch (IOException fallbackFailure) {
+                throw new IOException("symlink failed: " + link
+                        + " os: " + primary.getMessage()
+                        + " fallback: " + fallbackFailure.getMessage(), primary);
             }
         }
     }
