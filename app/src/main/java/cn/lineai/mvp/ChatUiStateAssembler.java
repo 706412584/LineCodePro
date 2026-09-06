@@ -57,7 +57,9 @@ public final class ChatUiStateAssembler {
                 aiSettings.isPreserveReasoningEnabled());
         String modelLabel = selectedModel == null
                 ? "未选择模型"
-                : contextInfo.getApiModelId();
+                : (selectedModel.getName() != null && selectedModel.getName().length() > 0
+                        ? selectedModel.getName()
+                        : contextInfo.getApiModelId());
         String selectedModelId = selectedModel == null ? "" : selectedModel.getId();
         List<ModelConfig> availableModels = modelRepository.getModels();
         String uiProjectPath = WorkspacePaths.SOURCE_SSH.equals(projectSource) && safe(projectPath).length() == 0

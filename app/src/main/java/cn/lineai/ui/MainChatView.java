@@ -511,7 +511,7 @@ public final class MainChatView extends FrameLayout implements MainContract.View
         }
     }
 
-    /** 头部模型胶囊点击：弹出模型快速选择器（复用 ModelPickerDialog）。 */
+    /** 头部模型胶囊点击：弹出分组模型选择器（当前模型置顶，含管理入口）。 */
     private void showModelQuickSwitchDialog() {
         ChatUiState state = lastState;
         if (state == null) {
@@ -522,18 +522,18 @@ public final class MainChatView extends FrameLayout implements MainContract.View
             presenter.showModelManagement();
             return;
         }
-        List<String> modelIds = new ArrayList<>();
-        for (ModelConfig model : models) {
-            if (model != null && model.getModelId() != null && model.getModelId().length() > 0) {
-                modelIds.add(model.getModelId());
-            }
-        }
-        if (modelIds.isEmpty()) {
-            presenter.showModelManagement();
-            return;
-        }
-        ModelPickerDialog.show(getContext(), modelIds, state.getSelectedModelId(),
-                (modelId, custom) -> presenter.onModelQuickSwitch(modelId));
+        ModelPickerDialog.showGrouped(getContext(), models, state.getSelectedModelId(),
+                new ModelPickerDialog.OnGroupedModelSelectedListener() {
+                    @Override
+                    public void onModelSelected(String configId) {
+                        presenter.onModelQuickSwitch(configId);
+                    }
+
+                    @Override
+                    public void onManageModels() {
+                        presenter.showModelManagement();
+                    }
+                });
     }
 
     @Override
@@ -711,15 +711,19 @@ public final class MainChatView extends FrameLayout implements MainContract.View
         } else {
             nextView = buildScreen(currentScreenId);
             if (currentScreenId.length() > 0 && nextView != null) {
-                screenCache.put(currentScreenId, nextView);
-                while (screenCache.size() > SCREEN_CACHE_MAX) {
-                    java.util.Map.Entry<String, View> eldest =
-                            screenCache.entrySet().iterator().next();
-                    String eldestKey = eldest.getKey();
-                    View eldestView = eldest.getValue();
-                    screenCache.remove(eldestKey);
-                    if (eldestView != null && eldestView.getParent() instanceof ViewGroup) {
-                        ((ViewGroup) eldestView.getParent()).removeView(eldestView);
+                // 动态参数屏（modelEdit:<id> / agentEdit:<id> 等 id 含 ':'）不缓存：
+                // 缓存会把打开时的表单快照留给下次进入，编辑后重开旧值回写，造成"修改不生效"
+                if (currentScreenId.indexOf(':') < 0) {
+                    screenCache.put(currentScreenId, nextView);
+                    while (screenCache.size() > SCREEN_CACHE_MAX) {
+                        java.util.Map.Entry<String, View> eldest =
+                                screenCache.entrySet().iterator().next();
+                        String eldestKey = eldest.getKey();
+                        View eldestView = eldest.getValue();
+                        screenCache.remove(eldestKey);
+                        if (eldestView != null && eldestView.getParent() instanceof ViewGroup) {
+                            ((ViewGroup) eldestView.getParent()).removeView(eldestView);
+                        }
                     }
                 }
             }

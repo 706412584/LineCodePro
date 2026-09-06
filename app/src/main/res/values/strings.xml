@@ -344,6 +344,9 @@
     <string name="screen_models_title">Models</string>
     <string name="screen_models_selected_count">Selected: %1$d</string>
     <string name="screen_models_empty_can_add">No models yet. Tap + to add OpenAI compatible, Codex or Anthropic models.</string>
+    <string name="screen_models_add_slots_title">Add a model</string>
+    <string name="screen_models_add_slot_hint">Configure base URL, key and model ids</string>
+    <string name="screen_models_manage">Manage models</string>
     <string name="screen_models_empty_readonly">No models yet. Please add OpenAI compatible, Codex or Anthropic models in model management first.</string>
     <string name="screen_models_delete_title">Delete model</string>
     <string name="screen_models_delete_message">Delete the selected %1$d model(s)?</string>

@@ -533,19 +533,62 @@ public final class ModelAddScreenView extends LinearLayout {
             selectedModelId[0] = modelIds.get(0);
             customIdSwitch.setChecked(false);
             renderModelIdInput(false);
-            StringBuilder preview = new StringBuilder();
-            for (int i = 0; i < modelIds.size(); i++) {
-                if (i > 0) {
-                    preview.append(", ");
-                }
-                preview.append(modelIds.get(i));
-            }
-            Toast.makeText(getContext(),
-                    getContext().getString(R.string.screen_model_add_batch_preview, modelIds.size())
-                            + ": " + preview,
-                    Toast.LENGTH_LONG).show();
+            renderBatchChips();
             updateSaveState();
         });
+    }
+
+    /** 批量模式已选模型 chips：实时显示/移除已勾选的模型。 */
+    private void renderBatchChips() {
+        if (modelInputHost == null) {
+            return;
+        }
+        // 移除旧 chips 容器（若有）
+        for (int i = modelInputHost.getChildCount() - 1; i >= 0; i--) {
+            Object tag = modelInputHost.getChildAt(i).getTag();
+            if (tag instanceof String && "batchChips".equals(tag)) {
+                modelInputHost.removeViewAt(i);
+            }
+        }
+        if (batchModelIds.size() <= 1) {
+            return;
+        }
+        Context context = getContext();
+        cn.lineai.ui.theme.FlowLayoutView chips = new cn.lineai.ui.theme.FlowLayoutView(context);
+        chips.setTag("batchChips");
+        LinearLayout.LayoutParams chipsParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+        chipsParams.topMargin = LineTheme.dp(context, LineTheme.SM);
+        for (String id : batchModelIds) {
+            LinearLayout chip = new LinearLayout(context);
+            chip.setOrientation(HORIZONTAL);
+            chip.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            chip.setBackground(LineTheme.roundedStroke(context, LineTheme.SURFACE_LIGHT, 12, LineTheme.ACCENT));
+            LineTheme.padding(chip, LineTheme.SM, 4, LineTheme.SM, 4);
+            TextView label = LineTheme.text(context, id, LineTheme.FONT_XS, LineTheme.TEXT, Typeface.NORMAL);
+            label.setSingleLine(true);
+            chip.addView(label, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            IconButtonView remove = new IconButtonView(context, IconButtonView.CLOSE);
+            remove.setIconColor(LineTheme.TEXT_TERTIARY);
+            remove.setIconSizeDp(14, 14);
+            LinearLayout.LayoutParams removeParams = new LinearLayout.LayoutParams(LineTheme.dp(context, 16), LineTheme.dp(context, 16));
+            removeParams.leftMargin = LineTheme.dp(context, 4);
+            String chipId = id;
+            remove.setOnClickListener(v -> {
+                batchModelIds.remove(chipId);
+                if (batchModelIds.size() == 1) {
+                    // 退回单选模式
+                    selectedModelId[0] = batchModelIds.get(0);
+                    batchModelIds = java.util.Collections.emptyList();
+                }
+                renderModelIdInput(false);
+                renderBatchChips();
+                updateSaveState();
+            });
+            chip.addView(remove, removeParams);
+            chips.addView(chip, new android.view.ViewGroup.MarginLayoutParams(
+                    LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+        }
+        modelInputHost.addView(chips, chipsParams);
     }
 
     private ModelConfig buildModelConfig(Context context) {

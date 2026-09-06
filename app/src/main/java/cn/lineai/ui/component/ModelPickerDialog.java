@@ -13,6 +13,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import cn.lineai.R;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 public final class ModelPickerDialog {
@@ -117,6 +119,131 @@ public final class ModelPickerDialog {
                 chosen.remove(label);
             }
         });
+        list.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    }
+
+    /** 分组单选回调：configId 为 ModelConfig.getId()。 */
+    public interface OnGroupedModelSelectedListener {
+        void onModelSelected(String configId);
+
+        void onManageModels();
+    }
+
+    /**
+     * 对话头部快速切换用的选择器：按服务商分组置顶当前选中、行显示模型名（副行 model id）、
+     * 选中标记、底部"管理模型"入口。单选语义。
+     */
+    public static void showGrouped(Context context, List<cn.lineai.model.ModelConfig> models,
+                                   String selectedConfigId, OnGroupedModelSelectedListener listener) {
+        Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCanceledOnTouchOutside(true);
+
+        LinearLayout panel = new LinearLayout(context);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(LineTheme.roundedTop(context, LineTheme.SURFACE_ELEVATED, 16));
+
+        TextView title = LineTheme.text(context, context.getString(R.string.header_model_switch_desc),
+                LineTheme.FONT_LG, LineTheme.TEXT, Typeface.BOLD);
+        LineTheme.padding(title, LineTheme.LG, LineTheme.MD, LineTheme.LG, LineTheme.MD);
+        panel.addView(title, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        ScrollView scroll = new cn.lineai.ui.theme.BoundedScrollView(context, 460);
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list, new ScrollView.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        panel.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 按 provider 分组（LinkedHashMap 保序，选中组置顶）
+        LinkedHashMap<String, List<cn.lineai.model.ModelConfig>> selectedFirst = new LinkedHashMap<>();
+        LinkedHashMap<String, List<cn.lineai.model.ModelConfig>> rest = new LinkedHashMap<>();
+        for (cn.lineai.model.ModelConfig model : models) {
+            if (model == null) {
+                continue;
+            }
+            String provider = model.getProviderLabel() != null && model.getProviderLabel().length() > 0
+                    ? model.getProviderLabel()
+                    : model.getProtocolType().getLabel();
+            boolean isSelected = model.getId().equals(selectedConfigId);
+            (isSelected ? selectedFirst : rest).computeIfAbsent(provider, k -> new ArrayList<>()).add(model);
+        }
+        selectedFirst.putAll(rest);
+        for (List<cn.lineai.model.ModelConfig> groupModels : selectedFirst.values()) {
+            for (cn.lineai.model.ModelConfig model : groupModels) {
+                addGroupedRow(list, dialog, model, model.getId().equals(selectedConfigId), listener);
+            }
+        }
+
+        View divider = new View(context);
+        divider.setBackgroundColor(LineTheme.BORDER_LIGHT);
+        panel.addView(divider, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1));
+
+        TextView manage = LineTheme.text(context, context.getString(R.string.screen_models_manage),
+                LineTheme.FONT_MD, LineTheme.ACCENT, Typeface.BOLD);
+        LineTheme.padding(manage, LineTheme.LG, 14, LineTheme.LG, 14);
+        manage.setClickable(true);
+        manage.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (listener != null) {
+                listener.onManageModels();
+            }
+        });
+        panel.addView(manage, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        panel.setPadding(0, 0, 0, LineTheme.dp(context, 8));
+
+        dialog.setContentView(panel);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+            window.setLayout(DialogDimensions.insetDialogWidth(context), LinearLayout.LayoutParams.WRAP_CONTENT);
+            window.setGravity(Gravity.BOTTOM);
+        }
+    }
+
+    /** 分组选择器行：主行模型名，副行 model id · 协议，选中打勾。 */
+    private static void addGroupedRow(LinearLayout list, Dialog dialog, cn.lineai.model.ModelConfig model,
+                                      boolean selected, OnGroupedModelSelectedListener listener) {
+        Context context = list.getContext();
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setClickable(true);
+        LineTheme.padding(row, LineTheme.LG, 12, LineTheme.LG, 12);
+        row.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (listener != null) {
+                listener.onModelSelected(model.getId());
+            }
+        });
+
+        LinearLayout info = new LinearLayout(context);
+        info.setOrientation(LinearLayout.VERTICAL);
+        row.addView(info, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        String name = model.getName() == null || model.getName().length() == 0
+                ? model.getModelId() : model.getName();
+        TextView rowTitle = LineTheme.text(context, name, LineTheme.FONT_MD,
+                selected ? LineTheme.ACCENT : LineTheme.TEXT, selected ? Typeface.BOLD : Typeface.NORMAL);
+        rowTitle.setSingleLine(true);
+        rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        info.addView(rowTitle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView sub = LineTheme.text(context, model.getModelId() + " · " + model.getProtocolType().getLabel(),
+                LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+        sub.setSingleLine(true);
+        sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subParams.topMargin = LineTheme.dp(context, 2);
+        info.addView(sub, subParams);
+
+        if (selected) {
+            IconButtonView check = new IconButtonView(context, IconButtonView.CHECK);
+            check.setIconColor(LineTheme.ACCENT);
+            check.setIconSizeDp(18, 16);
+            check.setClickable(false);
+            row.addView(check, new LinearLayout.LayoutParams(LineTheme.dp(context, 18), LineTheme.dp(context, 18)));
+        }
         list.addView(row, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
     }
 

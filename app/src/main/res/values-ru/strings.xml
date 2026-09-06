@@ -344,6 +344,9 @@
     <string name="screen_models_title">Модели</string>
     <string name="screen_models_selected_count">Выбрано: %1$d</string>
     <string name="screen_models_empty_can_add">Пока нет моделей. Нажмите +, чтобы добавить OpenAI совместимую, Codex или Anthropic модель.</string>
+    <string name="screen_models_add_slots_title">Добавить модель</string>
+    <string name="screen_models_add_slot_hint">Настройте base URL, ключ и ID моделей</string>
+    <string name="screen_models_manage">Управление моделями</string>
     <string name="screen_models_empty_readonly">Пока нет моделей. Сначала добавьте OpenAI совместимую, Codex или Anthropic модель в управлении моделями.</string>
     <string name="screen_models_delete_title">Удалить модель</string>
     <string name="screen_models_delete_message">Удалить выбранные %1$d модель(и)?</string>

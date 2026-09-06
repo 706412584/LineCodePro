@@ -17,8 +17,11 @@ import android.widget.TextView;
 import cn.lineai.R;
 import cn.lineai.model.ModelConfig;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class ModelListScreenView extends LinearLayout {
@@ -42,6 +45,35 @@ public final class ModelListScreenView extends LinearLayout {
     private final FrameLayout headerHost;
     private final LinearLayout list;
     private final Set<String> multiSelectedIds = new HashSet<>();
+    /** 服务商分组折叠状态：absent = 展开。多选模式下忽略折叠。 */
+    private final Map<String, Boolean> groupCollapsed = new HashMap<>();
+
+    /** 分组结果：LinkedHashMap 保插入序，主模型组由调用方置顶。 */
+    static LinkedHashMap<String, List<ModelConfig>> groupModelsByProvider(
+            List<ModelConfig> models, String selectedModelId, java.util.function.Function<ModelConfig, String> providerOf) {
+        LinkedHashMap<String, List<ModelConfig>> groups = new LinkedHashMap<>();
+        String selectedGroupKey = null;
+        for (ModelConfig model : models) {
+            String key = providerOf.apply(model);
+            if (selectedGroupKey == null && selectedModelId != null && selectedModelId.equals(model.getId())) {
+                selectedGroupKey = key;
+            }
+        }
+        // 先放主模型组，再放其余（保持原有相对顺序）
+        for (ModelConfig model : models) {
+            String key = providerOf.apply(model);
+            if (key.equals(selectedGroupKey)) {
+                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(model);
+            }
+        }
+        for (ModelConfig model : models) {
+            String key = providerOf.apply(model);
+            if (!key.equals(selectedGroupKey)) {
+                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(model);
+            }
+        }
+        return groups;
+    }
 
     public ModelListScreenView(Context context, List<ModelConfig> models, String selectedModelId, Listener listener) {
         this(context, models, selectedModelId, context.getString(R.string.screen_models_title), true, listener);
@@ -127,11 +159,125 @@ public final class ModelListScreenView extends LinearLayout {
             TextView empty = LineTheme.text(context, emptyText, LineTheme.FONT_SM, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
             empty.setLineSpacing(LineTheme.dp(context, 3), 1f);
             list.addView(empty, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+            renderAddSlots(context);
             return;
         }
 
-        for (ModelConfig model : models) {
-            addModel(list, model, selectedModelId.equals(model.getId()), multiSelectedIds.contains(model.getId()));
+        boolean multiSelect = !multiSelectedIds.isEmpty();
+        LinkedHashMap<String, List<ModelConfig>> groups =
+                groupModelsByProvider(models, selectedModelId, this::displayProvider);
+        for (Map.Entry<String, List<ModelConfig>> entry : groups.entrySet()) {
+            String provider = entry.getKey();
+            List<ModelConfig> groupModels = entry.getValue();
+            boolean selectedGroup = groupModels.stream().anyMatch(m -> m.getId().equals(selectedModelId));
+            addGroupHeader(context, provider, groupModels.size(), selectedGroup, multiSelect);
+            boolean collapsed = !multiSelect && !selectedGroup
+                    && Boolean.TRUE.equals(groupCollapsed.get(provider));
+            if (!collapsed) {
+                for (ModelConfig model : groupModels) {
+                    addModel(list, model, selectedModelId.equals(model.getId()), multiSelectedIds.contains(model.getId()));
+                }
+            }
+        }
+        if (allowManagement) {
+            renderAddSlots(context);
+        }
+    }
+
+    /** 组头：服务商名 + 数量 + 折叠 chevron（主模型组/多选模式不折叠）。 */
+    private void addGroupHeader(Context context, String provider, int count, boolean selectedGroup, boolean multiSelect) {
+        LinearLayout header = new LinearLayout(context);
+        header.setOrientation(HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        boolean collapsible = allowManagement && !selectedGroup && !multiSelect;
+        header.setClickable(collapsible);
+        if (collapsible) {
+            header.setOnClickListener(v -> {
+                boolean nowCollapsed = !Boolean.TRUE.equals(groupCollapsed.get(provider));
+                groupCollapsed.put(provider, nowCollapsed);
+                renderList();
+            });
+        }
+        LinearLayout.LayoutParams headerParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+        headerParams.bottomMargin = LineTheme.dp(context, LineTheme.SM);
+        headerParams.topMargin = LineTheme.dp(context, LineTheme.SM);
+
+        TextView title = LineTheme.text(context, provider, LineTheme.FONT_SM,
+                selectedGroup ? LineTheme.ACCENT : LineTheme.TEXT_SECONDARY, Typeface.BOLD);
+        header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView countView = LineTheme.text(context, String.valueOf(count), LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+        LinearLayout.LayoutParams countParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        countParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
+        header.addView(countView, countParams);
+
+        if (collapsible) {
+            boolean collapsed = Boolean.TRUE.equals(groupCollapsed.get(provider));
+            IconButtonView chevron = new IconButtonView(context, collapsed ? IconButtonView.CHEVRON_RIGHT : IconButtonView.CHEVRON_DOWN);
+            chevron.setIconColor(LineTheme.TEXT_TERTIARY);
+            chevron.setIconSizeDp(20, 14);
+            chevron.setClickable(false);
+            LinearLayout.LayoutParams chevronParams = new LinearLayout.LayoutParams(LineTheme.dp(context, 20), LineTheme.dp(context, 20));
+            chevronParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
+            header.addView(chevron, chevronParams);
+        }
+        list.addView(header, headerParams);
+    }
+
+    /** 常驻的 4 个服务商添加槽位（OpenAI 兼容 / Anthropic / Codex / 本地）。 */
+    private void renderAddSlots(Context context) {
+        TextView slotsTitle = LineTheme.text(context,
+                context.getString(R.string.screen_models_add_slots_title),
+                LineTheme.FONT_SM, LineTheme.TEXT_TERTIARY, Typeface.BOLD);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+        titleParams.topMargin = LineTheme.dp(context, LineTheme.LG);
+        titleParams.bottomMargin = LineTheme.dp(context, LineTheme.SM);
+        list.addView(slotsTitle, titleParams);
+
+        Object[][] slots = {
+                {IconButtonView.MCP, cn.lineai.model.ModelProtocolType.OPENAI_COMPATIBLE.getLabel()},
+                {IconButtonView.SERVER, cn.lineai.model.ModelProtocolType.ANTHROPIC_MESSAGES.getLabel()},
+                {IconButtonView.SPARKLES, cn.lineai.model.ModelProtocolType.CODEX_RESPONSES.getLabel()},
+                {IconButtonView.CPU, context.getString(R.string.model_provider_local)},
+        };
+        for (Object[] slot : slots) {
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setClickable(true);
+            row.setBackground(LineTheme.roundedStroke(context, LineTheme.SURFACE_ELEVATED, 12, LineTheme.BORDER_LIGHT));
+            LineTheme.padding(row, LineTheme.MD, LineTheme.MD, LineTheme.MD, LineTheme.MD);
+            row.setOnClickListener(v -> listener.onAddModel());
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+            rowParams.bottomMargin = LineTheme.dp(context, LineTheme.SM);
+
+            IconButtonView icon = new IconButtonView(context, (Integer) slot[0]);
+            icon.setIconColor(LineTheme.ACCENT);
+            icon.setIconSizeDp(34, 17);
+            icon.setClickable(false);
+            icon.setBackground(LineTheme.rounded(context, LineTheme.ACCENT_MUTED, 17));
+            row.addView(icon, new LinearLayout.LayoutParams(LineTheme.dp(context, 34), LineTheme.dp(context, 34)));
+
+            LinearLayout labels = new LinearLayout(context);
+            labels.setOrientation(VERTICAL);
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f);
+            labelParams.leftMargin = LineTheme.dp(context, LineTheme.MD);
+            row.addView(labels, labelParams);
+            labels.addView(LineTheme.textMedium(context,
+                    String.valueOf(slot[1]), LineTheme.FONT_MD, LineTheme.TEXT));
+            TextView hint = LineTheme.text(context,
+                    context.getString(R.string.screen_models_add_slot_hint),
+                    LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+            LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+            hintParams.topMargin = LineTheme.dp(context, 2);
+            labels.addView(hint, hintParams);
+
+            IconButtonView chevron = new IconButtonView(context, IconButtonView.CHEVRON_RIGHT);
+            chevron.setIconColor(LineTheme.TEXT_TERTIARY);
+            chevron.setIconSizeDp(20, 14);
+            chevron.setClickable(false);
+            row.addView(chevron, new LinearLayout.LayoutParams(LineTheme.dp(context, 20), LineTheme.dp(context, 20)));
+            list.addView(row, rowParams);
         }
     }
 

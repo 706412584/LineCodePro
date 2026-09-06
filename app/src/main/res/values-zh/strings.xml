@@ -344,6 +344,9 @@
     <string name="screen_models_title">模型</string>
     <string name="screen_models_selected_count">已选 %1$d 项</string>
     <string name="screen_models_empty_can_add">还没有模型。点击右上角 + 添加 OpenAI 兼容、Codex 或 Anthropic 模型。</string>
+    <string name="screen_models_add_slots_title">添加模型</string>
+    <string name="screen_models_add_slot_hint">配置 Base URL、密钥与模型 ID</string>
+    <string name="screen_models_manage">管理模型</string>
     <string name="screen_models_empty_readonly">还没有模型。请先在模型管理中添加 OpenAI 兼容、Codex 或 Anthropic 模型。</string>
     <string name="screen_models_delete_title">删除模型</string>
     <string name="screen_models_delete_message">确定删除 %1$d 个模型？</string>
