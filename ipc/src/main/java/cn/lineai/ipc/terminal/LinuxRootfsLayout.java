@@ -35,9 +35,33 @@ public final class LinuxRootfsLayout {
         return new File(baseDir(filesDir), ROOTFS_NAME);
     }
 
-    /** 解压临时目录。 */
+    /** 解压临时目录（固定名；遗留兼容用，勿再用于新安装）。 */
     public static File tmpDir(File filesDir) {
         return new File(baseDir(filesDir), ROOTFS_NAME + ".tmp");
+    }
+
+    /**
+     * 新安装用的唯一临时目录（alpine.tmp.&lt;millis&gt;）。
+     * 避开失败安装残留的 alpine.tmp（文件被占用时残留可能删不干净，
+     * 其中的旧文件会让 symlink 报 EEXIST、写入报 EROFS）。
+     */
+    public static File freshTmpDir(File filesDir) {
+        return new File(baseDir(filesDir), ROOTFS_NAME + ".tmp." + System.currentTimeMillis());
+    }
+
+    /** 清理所有临时目录（固定名 + 任意 .tmp.* 变体）。 */
+    public static void cleanupTmpDirs(File filesDir) {
+        File base = baseDir(filesDir);
+        File[] children = base.listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            String name = child.getName();
+            if (name.startsWith(ROOTFS_NAME + ".tmp")) {
+                deleteRecursive(child);
+            }
+        }
     }
 
     /** 元数据文件。 */

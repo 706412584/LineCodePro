@@ -185,8 +185,11 @@ public final class LinuxEnvironmentController {
         }
 
         reportProgress(PHASE_EXTRACT, "");
-        File tmpDir = LinuxRootfsLayout.tmpDir(filesDir);
+        // 清掉历史失败残留（固定名 tmp 与所有 .tmp.* 变体），再取全新唯一临时目录，
+        // 避免残留文件导致 symlink EEXIST / 写入 EROFS
         LinuxRootfsLayout.deleteAll(filesDir);
+        LinuxRootfsLayout.cleanupTmpDirs(filesDir);
+        File tmpDir = LinuxRootfsLayout.freshTmpDir(filesDir);
         AlpineTarExtractor.extract(tarGz, tmpDir);
         if (!new File(tmpDir, "bin/busybox").isFile()) {
             throw new IOException("rootfs sanity check failed: bin/busybox missing");

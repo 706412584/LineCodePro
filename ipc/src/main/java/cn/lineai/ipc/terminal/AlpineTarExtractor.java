@@ -110,6 +110,13 @@ public final class AlpineTarExtractor {
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("cannot mkdir: " + parent);
         }
+        if (out.exists() && !out.delete()) {
+            // 残留同名文件且删除失败（可能只读）：强制造一次覆盖语义
+            if (!out.canWrite()) {
+                //noinspection ResultOfMethodCallIgnored
+                out.setWritable(true);
+            }
+        }
         try (OutputStream output = new FileOutputStream(out)) {
             byte[] buffer = new byte[8192];
             long remaining = size;
@@ -130,19 +137,26 @@ public final class AlpineTarExtractor {
             Os.symlink(target, link.getAbsolutePath());
             return;
         } catch (Exception primary) {
-            // 降级：内容为目标路径的普通文件（个别文件系统/ROM 拒绝 symlink）。
-            // 父目录可能尚未随 tar 目录 entry 创建（entry 顺序不保证），先补齐。
-            File parent = link.getParentFile();
-            if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                throw new IOException("symlink failed (cannot create parent): " + link
-                        + " cause: " + primary, primary);
-            }
-            try (OutputStream output = new FileOutputStream(link)) {
-                output.write(target.getBytes(StandardCharsets.UTF_8));
-            } catch (IOException fallbackFailure) {
-                throw new IOException("symlink failed: " + link
-                        + " os: " + primary.getMessage()
-                        + " fallback: " + fallbackFailure.getMessage(), primary);
+            // EEXIST：残留同名文件（上次失败安装）——删除后重试一次
+            //noinspection ResultOfMethodCallIgnored
+            link.delete();
+            try {
+                Os.symlink(target, link.getAbsolutePath());
+                return;
+            } catch (Exception retried) {
+                // 降级：内容为目标路径的普通文件。父目录可能尚未创建，先补齐。
+                File parent = link.getParentFile();
+                if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                    throw new IOException("symlink failed (cannot create parent): " + link
+                            + " cause: " + retried, retried);
+                }
+                try (OutputStream output = new FileOutputStream(link)) {
+                    output.write(target.getBytes(StandardCharsets.UTF_8));
+                } catch (IOException fallbackFailure) {
+                    throw new IOException("symlink failed: " + link
+                            + " os: " + retried.getMessage()
+                            + " fallback: " + fallbackFailure.getMessage(), retried);
+                }
             }
         }
     }
