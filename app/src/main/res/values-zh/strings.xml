@@ -574,7 +574,9 @@
     <string name="screen_mcp_execution_local">本地工作区</string>
     <string name="screen_mcp_execution_ssh">SSH Shell</string>
     <string name="screen_mcp_execution_terminal_provider">终端提供者</string>
-    <string name="screen_mcp_execution_terminal_provider_desc">通过外部终端提供者应用执行 Shell 命令和传输文件</string>
+    <string name="screen_mcp_execution_terminal_provider_desc">通过内置终端执行 Shell 命令和传输文件，开箱即用；也可连接外部终端提供者应用</string>
+    <string name="builtin_terminal_provider_name">内置终端</string>
+    <string name="builtin_terminal_provider_badge">内置 · 无需安装</string>
     <string name="screen_mcp_execution_desc">选择工具调用的执行环境</string>
     <string name="screen_mcp_section_ssh">SSH 连接</string>
     <string name="screen_mcp_ssh_desc">连接远程 Linux 服务器并将其作为执行目标</string>

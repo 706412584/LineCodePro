@@ -1,0 +1,111 @@
+name: Debug APK Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_suffix:
+        description: 'Tag 后缀（附加在版本号后，如 beta.1；留空则用纯版本号+run 号）'
+        required: false
+        default: ''
+      prerelease:
+        description: '标记为预发布（Pre-release）'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: debug-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-debug-release:
+    name: Build and publish debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Get version info
+        id: version
+        run: |
+          VERSION_NAME=$(grep -E '^val releaseVersionName = "' app/build.gradle.kts | sed 's/.*"\([^"]*\)".*/\1/')
+          VERSION_CODE=$(grep -E 'versionCode = ' app/build.gradle.kts | sed 's/.*versionCode = \([0-9]*\).*/\1/')
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION_NAME ($VERSION_CODE)"
+
+      - name: Stage APK artifact
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/LineCode Pro ${VERSION_NAME}-debug-${{ github.run_number }}.apk"
+          ls -la dist
+
+      - name: Generate release notes
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.version_name }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+        run: |
+          {
+            echo "## LineCode Pro v${VERSION_NAME} (Debug)"
+            echo ""
+            echo "### 版本信息"
+            echo "- 版本名称: v${VERSION_NAME}"
+            echo "- 版本号: ${VERSION_CODE}"
+            echo "- 构建类型: **Debug**（debug 证书签名，适合测试与旁加载）"
+            echo "- 构建: #${{ github.run_number }} @ ${{ github.sha }}"
+            echo ""
+            echo "### 最近提交"
+            git log --oneline -10 || echo "No commits"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### 下载说明"
+            echo "- APK 使用 debug 证书签名，与 release 版签名不同，安装前请先卸载旧版本"
+          } > release_notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version_name }}-debug${{ inputs.tag_suffix != '' && format('.{0}', inputs.tag_suffix) || format('.{0}', github.run_number) }}
+          name: LineCode Pro v${{ steps.version.outputs.version_name }} Debug #${{ github.run_number }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ inputs.prerelease == 'true' }}
+          files: dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-${{ github.run_number }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30

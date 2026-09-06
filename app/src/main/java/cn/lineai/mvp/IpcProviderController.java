@@ -12,6 +12,7 @@ import cn.lineai.ipc.IpcProviderStateListener;
 import cn.lineai.ipc.IpcProviderType;
 import cn.lineai.ipc.ScannedProvider;
 import cn.lineai.ipc.terminal.TerminalIpcProvider;
+import cn.lineai.service.BuiltInTerminalProviderService;
 import java.util.Collections;
 import java.util.List;
 
@@ -88,7 +89,7 @@ public final class IpcProviderController implements IpcProviderStateListener {
         }
         IpcProviderConfig saved = ipcProviderStore.saveProvider(config);
         if (saved.isEnabled() && ipcProviderManager != null) {
-            ipcProviderManager.registerAndBind(saved);
+            ensureSingleTerminalProvider(saved.getId());
         }
         refreshTerminalProviderScreen();
     }
@@ -99,10 +100,7 @@ public final class IpcProviderController implements IpcProviderStateListener {
         }
         ipcProviderStore.setProviderEnabled(id, enabled);
         if (enabled) {
-            IpcProviderConfig config = findIpcProvider(id);
-            if (config != null) {
-                ipcProviderManager.registerAndBind(config);
-            }
+            ensureSingleTerminalProvider(id);
         } else {
             ipcProviderManager.unregisterAndUnbind(id);
         }
@@ -113,26 +111,86 @@ public final class IpcProviderController implements IpcProviderStateListener {
         if (ipcProviderStore == null || ipcProviderManager == null) {
             return;
         }
+        if (IpcProviderConfig.BUILT_IN_ID.equals(id)) {
+            return;
+        }
         ipcProviderManager.unregisterAndUnbind(id);
         ipcProviderStore.deleteProvider(id);
         refreshTerminalProviderScreen();
+    }
+
+    /**
+     * 单选语义：启用指定 terminal provider 并停用其余同类型（含内置），
+     * 保证同一时刻仅一个终端提供者绑定生效。
+     */
+    private void ensureSingleTerminalProvider(String activeId) {
+        for (IpcProviderConfig config : terminalProviders()) {
+            if (activeId.equals(config.getId())) {
+                ipcProviderManager.registerAndBind(config);
+            } else {
+                ipcProviderManager.unregisterAndUnbind(config.getId());
+                ipcProviderStore.setProviderEnabled(config.getId(), false);
+            }
+        }
+    }
+
+    private List<IpcProviderConfig> terminalProviders() {
+        if (ipcProviderStore == null) {
+            return Collections.emptyList();
+        }
+        return ipcProviderStore.getProvidersByType(IpcProviderType.TERMINAL);
     }
 
     private void restoreIpcProviders() {
         if (ipcProviderStore == null || ipcProviderManager == null) {
             return;
         }
-        List<IpcProviderConfig> providers = ipcProviderStore.getProviders();
-        for (IpcProviderConfig config : providers) {
-            if (!config.isEnabled()) {
-                continue;
-            }
-            try {
-                ipcProviderManager.registerAndBind(config);
-            } catch (RuntimeException e) {
-                Log.w(TAG, "重连 IPC 提供者失败: " + config.getId(), e);
+        seedBuiltInProvider();
+        IpcProviderConfig toBind = resolveProviderToBind(terminalProviders());
+        if (toBind == null) {
+            return;
+        }
+        try {
+            ipcProviderManager.registerAndBind(toBind);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "重连 IPC 提供者失败: " + toBind.getId(), e);
+        }
+    }
+
+    /**
+     * 首次启动时把内置终端提供者 seed 进 ipc_providers 表；
+     * 用户此后的启用/禁用状态由表持久化。
+     */
+    private void seedBuiltInProvider() {
+        for (IpcProviderConfig config : terminalProviders()) {
+            if (config.isBuiltIn()) {
+                return;
             }
         }
+        ipcProviderStore.saveProvider(IpcProviderConfig.builder()
+                .id(IpcProviderConfig.BUILT_IN_ID)
+                .providerType(IpcProviderType.TERMINAL.getId())
+                .name(context.getString(cn.lineai.R.string.builtin_terminal_provider_name))
+                .packageName(context.getPackageName())
+                .serviceClass(BuiltInTerminalProviderService.class.getName())
+                .enabled(true)
+                .build());
+    }
+
+    /**
+     * 从 terminal provider 列表（updated_at DESC）选出应绑定的唯一 provider：
+     * 第一个 enabled 的记录；全部禁用返回 null。
+     */
+    static IpcProviderConfig resolveProviderToBind(List<IpcProviderConfig> providers) {
+        if (providers == null) {
+            return null;
+        }
+        for (IpcProviderConfig config : providers) {
+            if (config != null && config.isEnabled()) {
+                return config;
+            }
+        }
+        return null;
     }
 
     private void onIpcProviderStateChanged(

@@ -238,7 +238,7 @@ For the full architecture bible (controllers, tool system, context manager, SQLi
 5. **Optional integrations.**
    - **Termux.** Install Termux from F-Droid, grant `RUN_COMMAND`, and the `shell_execute` tool will route through it.
    - **SSH.** Add a host under **Settings → SSH**; remote files appear in the project drawer.
-   - **IPC provider.** Install `terminal-provider` (or any third-party provider) and enable it under **Settings → MCP execution mode → Terminal Provider**. LineCode auto-rebinds on every cold start.
+   - **IPC provider.** The **built-in terminal provider** works out of the box — just switch the execution mode. Optionally install `terminal-provider` (or any third-party provider) and enable it instead; LineCode auto-rebinds on every cold start.
    - **Extensions.** Configure custom agents / MCP tools under **Extensions**.
 
 ### Try it with a model you already have
@@ -255,7 +255,7 @@ LineCode has three execution modes for shell and file tools. You can switch betw
 | ---- | ---------------------------- | -------------- |
 | **Local** | Through the Android SAF picker, in the app's own context. | Picking arbitrary folders on the device, no Termux required. |
 | **SSH** | Through `jsch` against an SSH host you configured. | Working on a remote dev box. |
-| **Terminal Provider (IPC)** | Through a third-party Android app bound over AIDL (the bundled `terminal-provider` is the reference implementation). | Isolated, sandboxed shell in a separate process. Pluggable — you can ship your own provider. |
+| **Terminal Provider (IPC)** | Through the **built-in terminal provider** (shipped in the APK, runs in an isolated `:terminal` process — no extra install), or any third-party provider app bound over AIDL (the bundled `terminal-provider` is the reference implementation). | Zero-setup local shell in a separate process; pluggable — you can also ship your own provider. |
 
 Each mode exposes a consistent `IpcFileTreeStore` / `SshFileTreeStore` / `FileTreeStore` interface, so the file tree, the attachment picker, and the model all see the same UI regardless of where bytes actually live.
 

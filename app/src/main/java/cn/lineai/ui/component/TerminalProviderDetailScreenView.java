@@ -131,13 +131,19 @@ public final class TerminalProviderDetailScreenView extends ScreenScaffoldView {
     }
 
     private LinearLayout installedRow(IpcProviderConfig config) {
+        String subtitle = config.getPackageName();
+        if (config.isBuiltIn()) {
+            subtitle = config.getPackageName() + " · " + getContext().getString(R.string.builtin_terminal_provider_badge);
+        }
         SwitchRowView row = new SwitchRowView(getContext(), IconButtonView.TERMINAL, config.getName(),
-                config.getPackageName(), config.isEnabled(),
+                subtitle, config.isEnabled(),
                 (button, checked) -> listener.onEnabledChanged(config.getId(), checked));
-        row.setOnLongClickListener(v -> {
-            showDeleteDialog(config);
-            return true;
-        });
+        if (!config.isBuiltIn()) {
+            row.setOnLongClickListener(v -> {
+                showDeleteDialog(config);
+                return true;
+            });
+        }
         return row;
     }
 

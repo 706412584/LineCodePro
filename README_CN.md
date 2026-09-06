@@ -238,7 +238,7 @@ LineCode/
 5. **可选集成。**
    - **Termux。** 从 F-Droid 安装 Termux，授权 `RUN_COMMAND`，`shell_execute` 工具就会走它。
    - **SSH。** 在 **设置 → SSH** 添加主机；项目抽屉里能看到远程文件。
-   - **IPC Provider。** 安装 `terminal-provider`（或任何第三方 Provider），在 **设置 → MCP execution mode → Terminal Provider** 启用。LineCode 每次冷启动会自动重连。
+   - **IPC Provider。** **内置终端提供者**开箱即用 —— 切换执行模式即可。也可以安装 `terminal-provider`（或任何第三方 Provider）替代启用；LineCode 每次冷启动会自动重连。
    - **扩展。** 在 **扩展** 页面配置自定义 Agent / MCP 工具。
 
 ### 拿现成模型试一下
@@ -255,7 +255,7 @@ LineCode 在 **设置 → MCP execution mode** 里提供三种 Shell / 文件工
 | ---- | -------------------------- | -------- |
 | **Local（本地）** | 经 Android SAF 选择器，在 App 自己的上下文里跑 | 设备本地任意目录，无需 Termux |
 | **SSH** | 通过 `jsch` 连到配置的 SSH 主机 | 远端开发机 |
-| **Terminal Provider（IPC）** | 绑定到一个第三方 Android App，通过 AIDL 调度（仓库自带 `terminal-provider` 作为参考实现） | 独立进程沙箱化 Shell，可插拔 —— 你可以发布自己的 Provider |
+| **Terminal Provider（IPC）** | 通过 **内置终端提供者**（随 APK 分发，跑在独立 `:terminal` 进程，无需额外安装），或任何第三方 Provider App（AIDL 绑定，仓库自带 `terminal-provider` 作为参考实现） | 零配置的独立进程本地 Shell；可插拔 —— 也可以发布自己的 Provider |
 
 三种模式都通过统一的 `IpcFileTreeStore` / `SshFileTreeStore` / `FileTreeStore` 接口暴露，所以文件树、附件选择器、模型看到的是同样的 UI，不管字节实际在哪里。
 

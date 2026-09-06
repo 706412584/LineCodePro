@@ -668,7 +668,9 @@
     <string name="screen_terminal_provider_delete_title">Удалить терминальный провайдер</string>
     <string name="screen_terminal_provider_delete_confirm">Удалить «%1$s»?</string>
     <string name="screen_mcp_execution_terminal_provider">Терминальный провайдер</string>
-    <string name="screen_mcp_execution_terminal_provider_desc">Выполнять shell-команды и передавать файлы через внешнее приложение терминального провайдера</string>
+    <string name="screen_mcp_execution_terminal_provider_desc">Выполнять shell-команды и передавать файлы через встроенный терминал; можно также подключить внешнее приложение терминального провайдера</string>
+    <string name="builtin_terminal_provider_name">Встроенный терминал</string>
+    <string name="builtin_terminal_provider_badge">Встроенный · без установки</string>
 
     <string name="screen_ssh_title">SSH подключение</string>
     <string name="screen_ssh_section_server">Удалённый Linux / сервер</string>

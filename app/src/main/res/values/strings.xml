@@ -668,7 +668,9 @@
     <string name="screen_terminal_provider_delete_title">Delete terminal provider</string>
     <string name="screen_terminal_provider_delete_confirm">Delete \"%1$s\"?</string>
     <string name="screen_mcp_execution_terminal_provider">Terminal provider</string>
-    <string name="screen_mcp_execution_terminal_provider_desc">Execute shell commands and transfer files via external terminal provider app</string>
+    <string name="screen_mcp_execution_terminal_provider_desc">Execute shell commands and transfer files via the built-in terminal, or connect an external terminal provider app</string>
+    <string name="builtin_terminal_provider_name">Built-in terminal</string>
+    <string name="builtin_terminal_provider_badge">Built-in · always available</string>
 
     <string name="screen_ssh_title">SSH connection</string>
     <string name="screen_ssh_section_server">Remote Linux / server</string>

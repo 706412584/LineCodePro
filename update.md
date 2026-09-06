@@ -1,5 +1,14 @@
 # 更新日志
 
+## v1.2.9（未发布）
+
+### 内置终端提供者
+
+- **免安装本地 Shell** - 主 App 内置终端提供者 Service（独立 `:terminal` 进程，`exported=false`），终端提供者执行模式开箱即用，不再需要安装外部 Provider 应用或配置 Termux SSH 回环；Shell 执行与文件操作复用既有 IPC 管线（`TerminalProviderBinder`），安全模型不变
+- **终端提供者单选** - 终端提供者列表改为单选语义：启用内置或任意外部提供者时自动停用其余同类型提供者，同一时刻仅一个生效；内置提供者固定 id（`builtin_terminal`）seed 进数据库，可禁用但不可删除
+- **共享 Binder 抽取** - `TerminalProviderService` 的 AIDL 实现整体迁入 `:ipc` 模块 `TerminalProviderBinder`，主 App 内置 Service 与示例 `terminal-provider` 应用共用同一实现，消除双份维护
+- **UI 与多语言** - 终端提供者管理页为内置条目显示「内置 · 无需安装」徽章且屏蔽长按删除；执行目标说明文案同步更新（中 / 英 / 俄）
+
 ## v1.2.8-max
 
 ### 原生 UI 与聊天布局重写

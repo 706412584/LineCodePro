@@ -1,6 +1,9 @@
 package cn.lineai.ipc;
 
 public final class IpcProviderConfig {
+    /** 主 App 内置终端提供者的固定 id（seed 进 ipc_providers 表，不可删除）。 */
+    public static final String BUILT_IN_ID = "builtin_terminal";
+
     private final String id;
     private final boolean enabled;
     private final String providerType;
@@ -25,6 +28,11 @@ public final class IpcProviderConfig {
 
     public String getId() {
         return id;
+    }
+
+    /** 是否为主 App 内置终端提供者。 */
+    public boolean isBuiltIn() {
+        return BUILT_IN_ID.equals(id);
     }
 
     public boolean isEnabled() {
