@@ -197,8 +197,22 @@ public final class LinuxEnvironmentController {
         writeResolvConf(tmpDir);
 
         File rootfsDir = LinuxRootfsLayout.rootfsDir(filesDir);
+        if (rootfsDir.exists()) {
+            // 上轮失败安装可能残留非空目录（文件句柄未释放时 deleteRecursive 部分失败），
+            // rename 到已存在目标会失败——先清目标再试
+            LinuxRootfsLayout.deleteRecursive(rootfsDir);
+        }
         if (!tmpDir.renameTo(rootfsDir)) {
-            throw new IOException("rootfs rename failed");
+            // 兜底：目标仍存在（删除被占用文件失败）→ 复制式迁移
+            boolean moved = tmpDir.isDirectory()
+                    && LinuxRootfsLayout.copyDirectory(tmpDir, rootfsDir);
+            if (!moved) {
+                throw new IOException("rootfs rename failed"
+                        + (rootfsDir.exists() ? " (target exists and is locked)" : "")
+                        + "; target=" + rootfsDir.getAbsolutePath()
+                        + " free=" + filesDir.getFreeSpace() / (1024 * 1024) + "MB");
+            }
+            LinuxRootfsLayout.deleteRecursive(tmpDir);
         }
 
         // SONAME 链接 + PROOT_TMP_DIR 目录（真机验证的运行时布局）

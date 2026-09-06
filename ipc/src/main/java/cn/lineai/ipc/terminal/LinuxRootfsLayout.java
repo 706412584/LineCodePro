@@ -175,7 +175,8 @@ public final class LinuxRootfsLayout {
         metaFile(filesDir).delete();
     }
 
-    private static void deleteRecursive(File file) {
+    /** 递归删除（public：安装流程清残留目标也用）。 */
+    public static void deleteRecursive(File file) {
         if (file == null || !file.exists()) {
             return;
         }
@@ -187,5 +188,43 @@ public final class LinuxRootfsLayout {
         }
         //noinspection ResultOfMethodCallIgnored
         file.delete();
+    }
+
+    /** 递归复制目录（rename 被占用文件阻断时的降级迁移）。 */
+    public static boolean copyDirectory(File source, File target) {
+        if (source == null || !source.isDirectory()) {
+            return false;
+        }
+        if (target.exists() && !target.isDirectory()) {
+            return false;
+        }
+        if (!target.exists() && !target.mkdirs()) {
+            return false;
+        }
+        File[] children = source.listFiles();
+        if (children == null) {
+            return false;
+        }
+        for (File child : children) {
+            File dest = new File(target, child.getName());
+            if (child.isDirectory()) {
+                if (!copyDirectory(child, dest)) {
+                    return false;
+                }
+            } else if (child.isFile()) {
+                try (FileInputStream input = new FileInputStream(child);
+                     FileOutputStream output = new FileOutputStream(dest)) {
+                    byte[] buffer = new byte[65536];
+                    int read;
+                    while ((read = input.read(buffer)) > 0) {
+                        output.write(buffer, 0, read);
+                    }
+                } catch (IOException e) {
+                    return false;
+                }
+            }
+            // 符号链接（isFile/isDirectory 均 false）：跳过，rootfs 内链接由使用方重建或忽略
+        }
+        return true;
     }
 }
