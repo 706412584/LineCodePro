@@ -19,6 +19,7 @@ public final class AlpineTarExtractorTest {
     @Test
     public void extractsFilesDirectoriesAndSymlinks() throws Exception {
         byte[] tarGz = buildTarGz(new TarBuilder()
+                .dir("./")
                 .dir("./bin/")
                 .file("./bin/busybox", "busybox-payload")
                 .file("./etc/resolv.conf", "nameserver 8.8.8.8")
@@ -36,6 +37,18 @@ public final class AlpineTarExtractorTest {
         // 硬链接复制为普通文件
         Assert.assertEquals("busybox-payload",
                 new String(Files.readAllBytes(new File(target, "bin/bb").toPath()), StandardCharsets.UTF_8));
+    }
+
+    /** 真机 bug 回归：真实 Alpine tar 首个 entry 是 "./"（根目录自身），不得判为逃逸。 */
+    @Test
+    public void rootDirectoryEntryIsAccepted() throws Exception {
+        byte[] tarGz = buildTarGz(new TarBuilder()
+                .dir("./")
+                .file("./hello.txt", "hi"));
+        File target = folder.newFolder("root-entry");
+        AlpineTarExtractor.extract(tarGz, target);
+        Assert.assertEquals("hi",
+                new String(Files.readAllBytes(new File(target, "hello.txt").toPath()), StandardCharsets.UTF_8));
     }
 
     @Test

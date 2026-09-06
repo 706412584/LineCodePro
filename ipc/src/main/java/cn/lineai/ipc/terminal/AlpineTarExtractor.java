@@ -153,7 +153,7 @@ public final class AlpineTarExtractor {
         }
     }
 
-    /** 防路径穿越：entry 名归一化后必须落在 targetDir 内。 */
+    /** 防路径穿越：entry 名归一化后必须落在 targetDir 内。 "./"（根目录 entry）合法。 */
     private static File resolveSafe(File targetDir, String name) throws IOException {
         String normalized = name.replace('\\', '/');
         while (normalized.startsWith("./")) {
@@ -161,6 +161,10 @@ public final class AlpineTarExtractor {
         }
         if (normalized.startsWith("/")) {
             normalized = normalized.substring(1);
+        }
+        // "./"、"."、"/" 等根目录 entry：目标即 targetDir 自身
+        if (normalized.length() == 0 || ".".equals(normalized)) {
+            return targetDir;
         }
         File resolved = new File(targetDir, normalized);
         String canonical;
