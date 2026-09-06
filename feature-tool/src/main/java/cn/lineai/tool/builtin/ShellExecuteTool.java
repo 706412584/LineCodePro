@@ -190,6 +190,7 @@ public final class ShellExecuteTool extends BaseTool {
         try {
             TerminalShellResult result = provider.executeShellInLinux(
                     command, cwd, timeoutMs, prootBin, LinuxRootfsLayout.rootfsDir(filesDir),
+                    resolveSettings(context) == null ? "" : resolveSettings(context).getProxyUrl(),
                     new TerminalShellCallback() {
                         @Override
                         public void onOutput(String content) {

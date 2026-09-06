@@ -85,6 +85,7 @@ public final class MainDependencies {
     final ChatModeRepository chatModeRepository;
     final InputSettingsRepository inputSettingsRepository;
     final OutputSettingsRepository outputSettingsRepository;
+    final cn.lineai.data.repository.ProxySettingsRepository proxySettingsRepository;
     final ThemeSettingsRepository themeSettingsRepository;
     final PromptTemplateRepository promptTemplateRepository;
     final ConversationStore conversationRepository;
@@ -142,6 +143,8 @@ public final class MainDependencies {
         inputSettingsRepository = new InputSettingsRepository(settingsRepository);
         outputSettingsRepository = new OutputSettingsRepository(settingsRepository);
         cn.lineai.security.UrlPolicy.setRelaxedHttpEnabled(outputSettingsRepository.get().isAllowAnyHttp());
+        proxySettingsRepository = new cn.lineai.data.repository.ProxySettingsRepository(settingsRepository);
+        cn.lineai.security.AppProxy.apply(proxySettingsRepository.getHost(), proxySettingsRepository.getPort());
         themeSettingsRepository = new ThemeSettingsRepository(systemConfigProvider, settingsRepository);
         promptTemplateRepository = new PromptTemplateRepository(resourceProvider, settingsRepository);
         LineTheme.apply(themeSettingsRepository.resolveCurrentPalette());

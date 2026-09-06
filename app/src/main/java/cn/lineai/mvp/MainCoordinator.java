@@ -116,6 +116,7 @@ public final class MainCoordinator implements MainUiController {
     private final ChatModeRepository chatModeRepository;
     private final InputSettingsRepository inputSettingsRepository;
     private final OutputSettingsRepository outputSettingsRepository;
+    private final cn.lineai.data.repository.ProxySettingsRepository proxySettingsRepository;
     private final ThemeSettingsRepository themeSettingsRepository;
     private final PromptTemplateRepository promptTemplateRepository;
     private final ConversationStore conversationRepository;
@@ -184,6 +185,7 @@ public final class MainCoordinator implements MainUiController {
         chatModeRepository = dependencies.chatModeRepository;
         inputSettingsRepository = dependencies.inputSettingsRepository;
         outputSettingsRepository = dependencies.outputSettingsRepository;
+        proxySettingsRepository = dependencies.proxySettingsRepository;
         themeSettingsRepository = dependencies.themeSettingsRepository;
         promptTemplateRepository = dependencies.promptTemplateRepository;
         conversationRepository = dependencies.conversationRepository;
@@ -652,6 +654,24 @@ public final class MainCoordinator implements MainUiController {
     }
 
     @Override
+    public String getProxyHost() {
+        return proxySettingsRepository.getHost();
+    }
+
+    @Override
+    public int getProxyPort() {
+        return proxySettingsRepository.getPort();
+    }
+
+    @Override
+    public void onProxySettingsChanged(String host, int port) {
+        proxySettingsRepository.set(host, port);
+        cn.lineai.security.AppProxy.apply(host, port);
+        refreshVisibleScreen("security");
+        render();
+    }
+
+    @Override
     public ThemeSettingsState getThemeSettings() {
         return settingsManagementController.getThemeSettings();
     }
@@ -670,6 +690,12 @@ public final class MainCoordinator implements MainUiController {
     public McpSettingsState getMcpSettingsState() {
         McpSettingsState state = settingsManagementController.getMcpSettingsState();
         if (linuxEnvironmentController != null && state != null) {
+            String envState = linuxEnvironmentController.state().name().toLowerCase(java.util.Locale.ROOT);
+            if (linuxEnvironmentController.isInstalling() && linuxEnvironmentController.installPhase().length() > 0) {
+                envState = envState + ":" + linuxEnvironmentController.installPhase();
+            } else if (envState.equals("failed") && linuxEnvironmentController.lastError().length() > 0) {
+                envState = envState + ":" + linuxEnvironmentController.lastError();
+            }
             return new McpSettingsState(
                     state.getExecutionMode(),
                     state.getConfigs(),
@@ -677,7 +703,7 @@ public final class MainCoordinator implements MainUiController {
                     state.getImageUnderstandingModelId(),
                     state.getImageGenerationModelId(),
                     linuxEnvironmentController.isEnabled(),
-                    linuxEnvironmentController.state().name().toLowerCase(java.util.Locale.ROOT));
+                    envState);
         }
         return state;
     }

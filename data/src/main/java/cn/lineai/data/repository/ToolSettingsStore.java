@@ -61,6 +61,9 @@ public interface ToolSettingsStore {
     /** 设置 Linux 环境子开关。 */
     default void setLinuxEnvEnabled(boolean enabled) {}
 
+    /** 全局 HTTP 代理 URL（http://host:port）；未配置返回空串。供 proot 内 apk 等透传。 */
+    default String getProxyUrl() { return ""; }
+
     default boolean isCommandPermanentlyAllowed(String scope, cn.lineai.model.tool.ToolCall call) { return false; }
     default void allowCommandPermanently(String scope, cn.lineai.model.tool.ToolCall call) {}
     default void clearPermanentCommandPermissions() {}

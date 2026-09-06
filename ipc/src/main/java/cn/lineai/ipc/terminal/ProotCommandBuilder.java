@@ -36,7 +36,7 @@ public final class ProotCommandBuilder {
     }
 
     /**
-     * 构造完整包装命令。
+     * 构造完整包装命令（无代理）。
      *
      * @param prootBin proot 可执行文件绝对路径（nativeLibraryDir/libproot.so）
      * @param rootfsDir rootfs 解压根目录
@@ -44,6 +44,16 @@ public final class ProotCommandBuilder {
      * @param command   用户原始命令
      */
     public static String build(String prootBin, File rootfsDir, String cwd, String command) {
+        return build(prootBin, rootfsDir, cwd, command, "");
+    }
+
+    /**
+     * 构造完整包装命令。
+     *
+     * @param proxyUrl 全局 HTTP 代理（http://host:port）；空串表示不代理。
+     *                 非空时 guest 内 export http_proxy/https_proxy，apk 等走代理。
+     */
+    public static String build(String prootBin, File rootfsDir, String cwd, String command, String proxyUrl) {
         String libDir = parentDir(prootBin);
         String loader = libDir + "/libproot_loader.so";
         String rootfs = rootfsDir == null ? "" : rootfsDir.getAbsolutePath();
@@ -59,7 +69,7 @@ public final class ProotCommandBuilder {
                 + " -R " + shellQuote(rootfs)
                 + " -b /storage -b /sdcard"
                 + " -w " + shellQuote(workDir)
-                + " /bin/sh -c " + shellQuote(guestScript(command));
+                + " /bin/sh -c " + shellQuote(guestScript(command, proxyUrl));
     }
 
     /**
@@ -124,9 +134,16 @@ public final class ProotCommandBuilder {
         return index > 0 ? path.substring(0, index) : ".";
     }
 
-    /** guest 内执行的脚本：注入 PATH/HOME/TERM 后运行原命令。 */
-    static String guestScript(String command) {
-        return "export HOME=/root TERM=xterm-256color PATH=" + GUEST_PATH + "; " + command;
+    /** guest 内执行的脚本：注入 PATH/HOME/TERM（及可选代理）后运行原命令。 */
+    static String guestScript(String command, String proxyUrl) {
+        StringBuilder script = new StringBuilder();
+        script.append("export HOME=/root TERM=xterm-256color PATH=").append(GUEST_PATH);
+        if (proxyUrl != null && proxyUrl.length() > 0) {
+            script.append(" http_proxy=").append(proxyUrl)
+                    .append(" https_proxy=").append(proxyUrl);
+        }
+        script.append("; ").append(command);
+        return script.toString();
     }
 
     /** host cwd → guest cwd；非 /storage 前缀回退 /root。 */

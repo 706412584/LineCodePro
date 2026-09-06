@@ -68,4 +68,19 @@ public final class LinuxRootfsLayoutTest {
         Assert.assertTrue(url.endsWith("-aarch64.tar.gz"));
         Assert.assertEquals(url + ".sha256", LinuxRootfsLayout.minirootfsSha256Url("aarch64"));
     }
+
+    @Test
+    public void mirrorUrlPointsAtTunaWithSameArtifactName() {
+        String official = LinuxRootfsLayout.minirootfsUrl("aarch64");
+        String mirror = LinuxRootfsLayout.minirootfsMirrorUrl("aarch64");
+        Assert.assertTrue(mirror.startsWith("https://mirrors.tuna.tsinghua.edu.cn/alpine/"));
+        Assert.assertEquals(official.substring(official.lastIndexOf('/') + 1),
+                mirror.substring(mirror.lastIndexOf('/') + 1));
+    }
+
+    @Test
+    public void bundledAssetNameMatchesArch() {
+        Assert.assertEquals("rootfs/alpine-minirootfs-3.20.3-aarch64.tar.gz",
+                LinuxRootfsLayout.bundledAssetName("aarch64"));
+    }
 }

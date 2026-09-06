@@ -74,9 +74,20 @@ public final class LinuxRootfsLayout {
                 + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
     }
 
+    /** 国内镜像（清华 TUNA）下载 URL；内容与官方 CDN 字节一致。 */
+    public static String minirootfsMirrorUrl(String arch) {
+        return "https://mirrors.tuna.tsinghua.edu.cn/alpine/v" + ALPINE_VERSION
+                + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
+    }
+
     /** 同目录 sha256 校验文件 URL。 */
     public static String minirootfsSha256Url(String arch) {
         return minirootfsUrl(arch) + ".sha256";
+    }
+
+    /** APK assets 内置的 rootfs 文件名（assets/rootfs/ 下）。 */
+    public static String bundledAssetName(String arch) {
+        return "rootfs/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
     }
 
     /** 安装元数据。 */

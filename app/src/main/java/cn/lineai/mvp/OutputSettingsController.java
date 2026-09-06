@@ -16,4 +16,11 @@ public interface OutputSettingsController {
     void onAllowAnyHttpChanged(boolean enabled);
 
     void onBypassPathProtectionChanged(boolean enabled);
+
+    String getProxyHost();
+
+    int getProxyPort();
+
+    /** host 为空表示清除代理；立即对全 app HTTP 生效。 */
+    void onProxySettingsChanged(String host, int port);
 }

@@ -29,6 +29,11 @@
 
 ## Alpine Linux mini rootfs (v3.20.3)
 
-- 不随 APK 分发；由用户在应用内显式触发下载自 https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/（含 sha256 校验）
+- **随 APK 内置分发**：`assets/rootfs/alpine-minirootfs-3.20.3-<arch>.tar.gz`（aarch64 / armv7 / x86_64，各约 3-4 MB）
+- 下载源为清华 TUNA 镜像（`mirrors.tuna.tsinghua.edu.cn`，内容与官方 CDN 字节一致）并经官方 `.sha256` 校验
 - 许可证：各包按自身许可证分发（Alpine 主体为 GPL-2.0 等）
+- sha256：
+  - aarch64: `041fa34a81788242df9e78fa69b97ab45b8ec47ddbf88864755610414a7bf3de`
+  - armv7: `ea8823fb4c4cf5f71f1d180e47904fb36ae74d3ded06c980230116b129fc5f07`
+  - x86_64: `d4e6fd67dcf75e40c451560ac7265166c2b72a0f38ddc9aae756a7de3d1efa0c`
 - 仅解压至应用私有目录供 proot 使用。

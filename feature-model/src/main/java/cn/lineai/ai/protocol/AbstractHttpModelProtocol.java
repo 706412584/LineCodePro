@@ -155,9 +155,9 @@ abstract class AbstractHttpModelProtocol implements ModelProtocol {
     }
 
     private HttpURLConnection openJsonPost(String url, JSONObject body, Map<String, String> headers, String accept) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(
-                UrlPolicy.requireHttpOrLocalCleartextUrl(url, "Model API URL")
-        ).openConnection();
+        java.net.URL target = new URL(UrlPolicy.requireHttpOrLocalCleartextUrl(url, "Model API URL"));
+        HttpURLConnection connection = (HttpURLConnection) target.openConnection(
+                cn.lineai.security.AppProxy.proxyFor(target.getHost()));
         connection.setRequestMethod("POST");
         connection.setConnectTimeout(20000);
         connection.setReadTimeout(600000);

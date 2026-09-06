@@ -176,6 +176,11 @@ public final class ToolSettingsRepository implements ToolSettingsStore {
     }
 
     @Override
+    public synchronized String getProxyUrl() {
+        return new ProxySettingsRepository(settingsRepository).getProxyUrl();
+    }
+
+    @Override
     public synchronized List<McpToolConfig> getConfigs() {
         String executionMode = getExecutionMode();
         ArrayList<McpToolConfig> configs = new ArrayList<>();

@@ -53,8 +53,23 @@ public final class ProotCommandBuilderTest {
 
     @Test
     public void guestScriptInjectsPathBeforeCommand() {
-        String script = ProotCommandBuilder.guestScript("true");
+        String script = ProotCommandBuilder.guestScript("true", "");
         Assert.assertTrue(script.startsWith("export HOME=/root TERM=xterm-256color PATH=/usr"));
         Assert.assertTrue(script.endsWith("; true"));
+        Assert.assertFalse(script.contains("http_proxy"));
+    }
+
+    @Test
+    public void guestScriptWithProxyExportsProxyVars() {
+        String script = ProotCommandBuilder.guestScript("apk add git", "http://127.0.0.1:7890");
+        Assert.assertTrue(script.contains(" http_proxy=http://127.0.0.1:7890"));
+        Assert.assertTrue(script.contains(" https_proxy=http://127.0.0.1:7890"));
+        Assert.assertTrue(script.endsWith("; apk add git"));
+    }
+
+    @Test
+    public void buildWithProxyCarriesProxyIntoWrappedCommand() {
+        String command = ProotCommandBuilder.build(PROOT, ROOTFS, "", "wget x", "http://127.0.0.1:7890");
+        Assert.assertTrue(command.contains("http_proxy=http://127.0.0.1:7890"));
     }
 }

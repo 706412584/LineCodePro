@@ -111,7 +111,7 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         addCard(content, card);
     }
 
-    /** terminal_provider 模式下的「Linux 环境」卡片：开关 + 状态 + 安装/删除。 */
+    /** terminal_provider 模式下的「Linux 环境」卡片：开关 + 状态 + 进度/错误 + 安装/删除/重试。 */
     private void addLinuxEnv(LinearLayout content) {
         Context context = content.getContext();
         LinearLayout card = card(context);
@@ -123,25 +123,44 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         tintSwitch(toggle, (button, checked) -> listener.onLinuxEnvEnabledChanged(checked));
         card.addView(toggle, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
 
-        String statusText = linuxStatusText(context);
+        String envState = state.getLinuxEnvState();
+        String baseState = envState.contains(":") ? envState.substring(0, envState.indexOf(':')) : envState;
+        String rest = envState.contains(":") ? envState.substring(envState.indexOf(':') + 1) : "";
+        boolean installing = "installing".equals(baseState);
+        boolean failed = "failed".equals(baseState);
+
+        String statusText = linuxStatusText(context, baseState, installing ? rest : "");
         TextView status = desc(context, statusText);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
         statusParams.topMargin = LineTheme.dp(context, LineTheme.SM);
         card.addView(status, statusParams);
 
-        String envState = state.getLinuxEnvState();
-        boolean installing = "installing".equals(envState);
-        if ("missing".equals(envState) || "unsupported".equals(envState)) {
-            LinearLayout install = actionButton(context,
-                    context.getString(R.string.screen_mcp_linux_download),
+        if (failed && rest.length() > 0) {
+            TextView error = LineTheme.text(context,
+                    context.getString(R.string.screen_mcp_linux_error_prefix) + rest,
+                    LineTheme.FONT_XS, LineTheme.DANGER, android.graphics.Typeface.NORMAL);
+            error.setLineSpacing(LineTheme.dp(context, 3), 1f);
+            LinearLayout.LayoutParams errorParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+            errorParams.topMargin = LineTheme.dp(context, LineTheme.XS);
+            card.addView(error, errorParams);
+        }
+
+        if (installing) {
+            LinearLayout busy = actionButton(context,
+                    context.getString(R.string.screen_mcp_linux_status_installing),
+                    IconButtonView.DOWNLOAD, false, v -> { });
+            busy.setClickable(false);
+            busy.setAlpha(0.5f);
+            card.addView(busy, buttonParams(context));
+        } else if ("missing".equals(baseState) || "unsupported".equals(baseState) || failed) {
+            String label = failed
+                    ? context.getString(R.string.screen_mcp_linux_retry)
+                    : context.getString(R.string.screen_mcp_linux_download);
+            LinearLayout install = actionButton(context, label,
                     IconButtonView.DOWNLOAD, true,
                     v -> listener.onLinuxEnvInstallRequested());
-            if (installing) {
-                install.setClickable(false);
-                install.setAlpha(0.5f);
-            }
             card.addView(install, buttonParams(context));
-        } else if ("installed".equals(envState)) {
+        } else if ("installed".equals(baseState)) {
             LinearLayout delete = actionButton(context,
                     context.getString(R.string.screen_mcp_linux_delete),
                     IconButtonView.TRASH_2, false,
@@ -151,16 +170,35 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         addCard(content, card);
     }
 
-    private String linuxStatusText(Context context) {
-        String envState = state.getLinuxEnvState();
-        if ("installing".equals(envState)) {
-            return context.getString(R.string.screen_mcp_linux_status_installing);
+    /** 安装阶段 → 本地化状态文案（detail 为下载百分比等）。 */
+    private String linuxStatusText(Context context, String baseState, String phase) {
+        if ("installing".equals(baseState)) {
+            String phaseKey = phase.contains(":") ? phase.substring(0, phase.indexOf(':')) : phase;
+            String detail = phase.contains(":") ? phase.substring(phase.indexOf(':') + 1) : "";
+            int res;
+            switch (phaseKey) {
+                case "bundled": res = R.string.screen_mcp_linux_phase_bundled; break;
+                case "download": res = R.string.screen_mcp_linux_phase_download; break;
+                case "verify": res = R.string.screen_mcp_linux_phase_verify; break;
+                case "extract": res = R.string.screen_mcp_linux_phase_extract; break;
+                case "configure": res = R.string.screen_mcp_linux_phase_configure; break;
+                case "tools": res = R.string.screen_mcp_linux_phase_tools; break;
+                default: res = R.string.screen_mcp_linux_phase_generic; break;
+            }
+            if (detail.length() == 0) {
+                // 所有 phase_* 均含 %1$s；空 detail 传占位空串
+                return context.getString(res, "");
+            }
+            return context.getString(res, detail);
         }
-        if ("installed".equals(envState)) {
+        if ("installed".equals(baseState)) {
             return context.getString(R.string.screen_mcp_linux_status_installed);
         }
-        if ("unsupported".equals(envState)) {
+        if ("unsupported".equals(baseState)) {
             return context.getString(R.string.screen_mcp_linux_status_unsupported);
+        }
+        if ("failed".equals(baseState)) {
+            return context.getString(R.string.screen_mcp_linux_status_failed);
         }
         return context.getString(R.string.screen_mcp_linux_status_missing);
     }

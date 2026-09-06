@@ -65,11 +65,68 @@ public final class SimpleHttpClient {
         return download(url, connectTimeoutMs, readTimeoutMs, (int) MAX_RESPONSE_BODY_BYTES);
     }
 
+    /** 下载进度回调：read 为已读字节，total 为 Content-Length（未知时 0）。 */
+    public interface DownloadProgressListener {
+        void onProgress(long read, long total);
+    }
+
+    /** 带进度回调的下载（大文件场景：rootfs 等）。 */
+    public static DownloadResult downloadWithProgress(String url, int connectTimeoutMs, int readTimeoutMs,
+                                                      DownloadProgressListener progress) throws Exception {
+        String safeUrl = UrlPolicy.requireHttpOrLocalCleartextUrl(url, "URL");
+        HttpURLConnection connection = null;
+        try {
+            java.net.URL target = new URL(safeUrl);
+            connection = (HttpURLConnection) target.openConnection(AppProxy.proxyFor(target.getHost()));
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(connectTimeoutMs);
+            connection.setReadTimeout(readTimeoutMs);
+            connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("User-Agent", "LineCode/1.0");
+            int code = connection.getResponseCode();
+            if (code < 200 || code >= 300) {
+                throw new Exception("HTTP download failed: " + code);
+            }
+            long total = connection.getContentLength();
+            String mimeType = connection.getContentType();
+            if (mimeType == null || mimeType.length() == 0) {
+                mimeType = "application/octet-stream";
+            } else {
+                int semicolon = mimeType.indexOf(';');
+                if (semicolon > 0) {
+                    mimeType = mimeType.substring(0, semicolon).trim();
+                }
+            }
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream(4 * 1024 * 1024);
+            try (InputStream input = connection.getInputStream()) {
+                byte[] chunk = new byte[65536];
+                long read = 0;
+                int n;
+                while ((n = input.read(chunk)) > 0) {
+                    if (read + n > MAX_RESPONSE_BODY_BYTES) {
+                        throw new Exception("download exceeds limit: " + MAX_RESPONSE_BODY_BYTES);
+                    }
+                    buffer.write(chunk, 0, n);
+                    read += n;
+                    if (progress != null) {
+                        progress.onProgress(read, total);
+                    }
+                }
+            }
+            return new DownloadResult(mimeType, buffer.toByteArray());
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
     public static DownloadResult download(String url, int connectTimeoutMs, int readTimeoutMs, int maxBytes) throws Exception {
         String safeUrl = UrlPolicy.requireHttpOrLocalCleartextUrl(url, "URL");
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) new URL(safeUrl).openConnection();
+            java.net.URL target = new URL(safeUrl);
+            connection = (HttpURLConnection) target.openConnection(AppProxy.proxyFor(target.getHost()));
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(connectTimeoutMs);
             connection.setReadTimeout(readTimeoutMs);
@@ -100,7 +157,8 @@ public final class SimpleHttpClient {
         String safeUrl = UrlPolicy.requireHttpOrLocalCleartextUrl(request.url, "URL");
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) new URL(safeUrl).openConnection();
+            java.net.URL target = new URL(safeUrl);
+            connection = (HttpURLConnection) target.openConnection(AppProxy.proxyFor(target.getHost()));
             connection.setRequestMethod(request.method);
             connection.setConnectTimeout(request.connectTimeoutMs);
             connection.setReadTimeout(request.readTimeoutMs);

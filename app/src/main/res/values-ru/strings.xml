@@ -679,6 +679,24 @@
     <string name="screen_mcp_linux_status_unsupported">proot не поддерживается на этом устройстве; команды выполняются в системном shell</string>
     <string name="screen_mcp_linux_download">Скачать Linux-среду</string>
     <string name="screen_mcp_linux_delete">Удалить Linux-среду</string>
+    <string name="screen_mcp_linux_retry">Повторить установку</string>
+    <string name="screen_mcp_linux_status_failed">Установка не удалась</string>
+    <string name="screen_mcp_linux_error_prefix">Ошибка: </string>
+    <string name="screen_mcp_linux_phase_bundled">Чтение встроенного образа…</string>
+    <string name="screen_mcp_linux_phase_generic">Установка… %1$s</string>
+    <string name="screen_mcp_linux_phase_download">Загрузка %1$s</string>
+    <string name="screen_mcp_linux_phase_verify">Проверка контрольной суммы…</string>
+    <string name="screen_mcp_linux_phase_extract">Распаковка rootfs…</string>
+    <string name="screen_mcp_linux_phase_configure">Настройка среды…</string>
+    <string name="screen_mcp_linux_phase_tools">Установка пакетов инструментов (git и др.)…</string>
+    <string name="screen_security_section_proxy">Сетевой прокси</string>
+    <string name="screen_security_proxy_host">Адрес прокси</string>
+    <string name="screen_security_proxy_port">Порт прокси</string>
+    <string name="screen_security_proxy_apply">Применить</string>
+    <string name="screen_security_proxy_clear">Очистить</string>
+    <string name="screen_security_proxy_invalid">Введите корректный адрес и порт (1–65535)</string>
+    <string name="screen_security_proxy_applied">Весь HTTP-трафик приложения идёт через прокси; localhost всегда напрямую</string>
+    <string name="screen_security_proxy_hint">например 127.0.0.1 и 7890</string>
 
     <string name="screen_ssh_title">SSH подключение</string>
     <string name="screen_ssh_section_server">Удалённый Linux / сервер</string>

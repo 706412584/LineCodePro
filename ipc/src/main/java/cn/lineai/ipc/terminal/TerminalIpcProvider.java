@@ -39,7 +39,14 @@ public final class TerminalIpcProvider extends BaseIpcProvider {
     public TerminalShellResult executeShellInLinux(String command, String cwd, long timeoutMs,
                                                    String prootBin, File rootfsDir,
                                                    TerminalShellCallback callback) throws RemoteException {
-        String wrapped = ProotCommandBuilder.build(prootBin, rootfsDir, cwd, command);
+        return executeShellInLinux(command, cwd, timeoutMs, prootBin, rootfsDir, "", callback);
+    }
+
+    /** 带全局 HTTP 代理的 Linux 执行（guest 内 export http_proxy/https_proxy）。 */
+    public TerminalShellResult executeShellInLinux(String command, String cwd, long timeoutMs,
+                                                   String prootBin, File rootfsDir, String proxyUrl,
+                                                   TerminalShellCallback callback) throws RemoteException {
+        String wrapped = ProotCommandBuilder.build(prootBin, rootfsDir, cwd, command, proxyUrl);
         // cwd 交给 proot -w 参数（guest 路径），host 侧工作目录用 provider 默认
         return executeShell(wrapped, "", timeoutMs, callback);
     }

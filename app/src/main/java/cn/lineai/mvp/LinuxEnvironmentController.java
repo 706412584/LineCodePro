@@ -1,8 +1,6 @@
 package cn.lineai.mvp;
 
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 import cn.lineai.data.repository.ToolSettingsStore;
 import cn.lineai.ipc.IpcProviderManager;
@@ -12,23 +10,35 @@ import cn.lineai.ipc.terminal.LinuxRootfsLayout;
 import cn.lineai.ipc.terminal.ProotCommandBuilder;
 import cn.lineai.ipc.terminal.TerminalIpcProvider;
 import cn.lineai.security.SimpleHttpClient;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
  * Linux 环境（proot + Alpine rootfs）生命周期控制器。
  *
- * <p>负责 rootfs 的下载（sha256 校验）、解压、安装后探测与删除；
- * 状态变更通过 {@link Host} 回调刷新设置页。</p>
+ * <p>rootfs 获取顺序：APK assets 内置（离线可用）→ 清华镜像下载 → 官方 CDN 回退。
+ * 安装阶段经 {@link Host#onInstallProgress} 实时回调 UI（下载百分比/解压/配置/工具包）；
+ * 失败原因记录在 {@link #lastError} 供界面显示与重试。</p>
  */
 public final class LinuxEnvironmentController {
 
     /** rootfs 状态，供 UI 显示。 */
     public enum State {
-        MISSING, INSTALLING, INSTALLED, UNSUPPORTED
+        MISSING, INSTALLING, INSTALLED, UNSUPPORTED, FAILED
     }
+
+    /** 安装阶段 code（UI 端翻译；DOWNLOAD 时 detail 为百分比）。 */
+    public static final String PHASE_BUNDLED = "bundled";
+    public static final String PHASE_DOWNLOAD = "download";
+    public static final String PHASE_VERIFY = "verify";
+    public static final String PHASE_EXTRACT = "extract";
+    public static final String PHASE_CONFIGURE = "configure";
+    public static final String PHASE_TOOLS = "tools";
+    public static final String PHASE_DONE = "done";
 
     public interface Host {
         void refreshLinuxEnvUi();
@@ -48,8 +58,9 @@ public final class LinuxEnvironmentController {
     private final IpcProviderManager ipcProviderManager;
     private final BackgroundTaskRunner backgroundTasks;
     private final Host host;
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private volatile boolean installing;
+    private volatile String installPhase = "";
+    private volatile String lastError = "";
 
     public LinuxEnvironmentController(
             Context context,
@@ -87,9 +98,19 @@ public final class LinuxEnvironmentController {
         }
         LinuxRootfsLayout.Meta meta = LinuxRootfsLayout.readMeta(context.getFilesDir());
         if (meta == null || !LinuxRootfsLayout.isInstalled(context.getFilesDir())) {
-            return State.MISSING;
+            return lastError.length() > 0 ? State.FAILED : State.MISSING;
         }
         return meta.prootSupported ? State.INSTALLED : State.UNSUPPORTED;
+    }
+
+    /** 当前安装阶段（installing 时有效）。 */
+    public String installPhase() {
+        return installPhase;
+    }
+
+    /** 最近一次安装失败原因；成功后清空。 */
+    public String lastError() {
+        return lastError;
     }
 
     /** 已安装 rootfs 占用字节数；未安装返回 0。 */
@@ -97,17 +118,21 @@ public final class LinuxEnvironmentController {
         return directorySize(LinuxRootfsLayout.rootfsDir(context.getFilesDir()));
     }
 
-    /** 启动安装（下载 → 校验 → 解压 → resolv.conf → probe → meta）。幂等：安装中忽略。 */
+    /** 启动安装（assets/下载 → 校验 → 解压 → 配置 → probe → 工具包 → meta）。幂等：安装中忽略。 */
     public void install() {
         if (installing) {
             return;
         }
         String arch = LinuxRootfsLayout.alpineArch();
         if (arch.length() == 0) {
+            lastError = "unsupported device ABI";
             Log.w(TAG, "unsupported ABI for alpine rootfs");
+            refreshUi();
             return;
         }
         installing = true;
+        lastError = "";
+        installPhase = "";
         refreshUi();
         backgroundTasks.execute("linecode-linux-install", () -> {
             Exception failure = null;
@@ -115,39 +140,37 @@ public final class LinuxEnvironmentController {
                 installInternal(arch);
             } catch (Exception e) {
                 failure = e;
+                lastError = e.getMessage() == null ? e.toString() : e.getMessage();
                 Log.e(TAG, "linux env install failed", e);
             }
-            final Exception error = failure;
+            final boolean ok = failure == null;
             installing = false;
-            post(() -> {
-                if (error != null && host != null) {
-                    // 错误细节进日志即可；UI 状态由 state() 重新计算（MISSING）
-                    Log.w(TAG, "install failure surfaced: " + error.getMessage());
-                }
-                refreshUi();
-            });
+            installPhase = ok ? PHASE_DONE : "";
+            post(this::refreshUi);
         });
     }
 
     public void delete() {
         LinuxRootfsLayout.deleteAll(context.getFilesDir());
+        lastError = "";
         refreshUi();
     }
 
     private void installInternal(String arch) throws Exception {
         File filesDir = context.getFilesDir();
 
-        byte[] tarGz = SimpleHttpClient.download(
-                LinuxRootfsLayout.minirootfsUrl(arch),
-                CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS).bytes;
+        byte[] tarGz = obtainRootfs(arch);
+
+        reportProgress(PHASE_VERIFY, "");
         String expectedSha256 = SimpleHttpClient.get(
                 LinuxRootfsLayout.minirootfsSha256Url(arch),
-                CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS).trim();
+                15000, 30000).trim();
         String actualSha256 = sha256Hex(tarGz);
         if (expectedSha256.length() > 0 && !expectedSha256.equalsIgnoreCase(actualSha256)) {
             throw new IOException("sha256 mismatch: expected " + expectedSha256 + " got " + actualSha256);
         }
 
+        reportProgress(PHASE_EXTRACT, "");
         File tmpDir = LinuxRootfsLayout.tmpDir(filesDir);
         LinuxRootfsLayout.deleteAll(filesDir);
         AlpineTarExtractor.extract(tarGz, tmpDir);
@@ -155,6 +178,7 @@ public final class LinuxEnvironmentController {
             throw new IOException("rootfs sanity check failed: bin/busybox missing");
         }
 
+        reportProgress(PHASE_CONFIGURE, "");
         // DNS：Android 宿主无 /etc/resolv.conf，proot -R 不会带来可用的
         writeResolvConf(tmpDir);
 
@@ -170,11 +194,59 @@ public final class LinuxEnvironmentController {
 
         boolean supported = probeProot(rootfsDir);
         if (supported) {
+            reportProgress(PHASE_TOOLS, "");
             preinstallToolPackages(prootBin, rootfsDir);
         }
         LinuxRootfsLayout.writeMeta(filesDir, new LinuxRootfsLayout.Meta(
                 LinuxRootfsLayout.ALPINE_PATCH, arch,
                 System.currentTimeMillis(), supported));
+    }
+
+    /**
+     * rootfs 获取：APK assets 内置（离线）→ 清华镜像（带进度）→ 官方 CDN。
+     * sha256 在调用方统一校验。
+     */
+    private byte[] obtainRootfs(String arch) throws Exception {
+        // 1) assets 内置
+        try (InputStream input = context.getAssets().open(LinuxRootfsLayout.bundledAssetName(arch))) {
+            reportProgress(PHASE_BUNDLED, "");
+            return readAll(input);
+        } catch (IOException noAsset) {
+            // 老 APK / 未来瘦身场景，走下载
+        }
+        // 2) 清华镜像
+        reportProgress(PHASE_DOWNLOAD, "0%");
+        try {
+            return SimpleHttpClient.downloadWithProgress(
+                    LinuxRootfsLayout.minirootfsMirrorUrl(arch),
+                    CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS,
+                    (read, total) -> reportProgress(PHASE_DOWNLOAD,
+                            total > 0 ? (read * 100 / total) + "%" : (read / 1024) + " KB")).bytes;
+        } catch (Exception mirrorFailure) {
+            Log.w(TAG, "mirror download failed, falling back to official CDN: " + mirrorFailure.getMessage());
+        }
+        // 3) 官方 CDN
+        reportProgress(PHASE_DOWNLOAD, "0%");
+        return SimpleHttpClient.downloadWithProgress(
+                LinuxRootfsLayout.minirootfsUrl(arch),
+                CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS,
+                (read, total) -> reportProgress(PHASE_DOWNLOAD,
+                        total > 0 ? (read * 100 / total) + "%" : (read / 1024) + " KB")).bytes;
+    }
+
+    private static byte[] readAll(InputStream input) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(4 * 1024 * 1024);
+        byte[] chunk = new byte[65536];
+        int read;
+        while ((read = input.read(chunk)) > 0) {
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
+    }
+
+    private void reportProgress(String phase, String detail) {
+        installPhase = detail.length() == 0 ? phase : phase + ":" + detail;
+        post(this::refreshUi);
     }
 
     /**

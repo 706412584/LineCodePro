@@ -57,4 +57,14 @@ public final class FormTextFieldView extends LinearLayout {
     public EditText getInput() {
         return input;
     }
+
+    /** 当前输入内容（绝不为 null）。 */
+    public String getText() {
+        return input.getText() == null ? "" : input.getText().toString();
+    }
+
+    /** 程序化设置输入内容。 */
+    public void setText(String value) {
+        input.setText(value == null ? "" : value);
+    }
 }

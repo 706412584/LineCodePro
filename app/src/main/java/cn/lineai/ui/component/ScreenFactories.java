@@ -415,7 +415,9 @@ public final class ScreenFactories {
     public static final class SecuritySettingsScreenFactory implements ScreenFactory {
         @Override
         public View createScreen(MainChatView view, MainUiController controller, Context context) {
-            return new SecuritySettingsScreenView(context, controller.getOutputSettings(), new SecuritySettingsScreenView.Listener() {
+            return new SecuritySettingsScreenView(context, controller.getOutputSettings(),
+                    controller.getProxyHost(), controller.getProxyPort(),
+                    new SecuritySettingsScreenView.Listener() {
                 @Override
                 public void onBack() {
                     view.handleScreenBack();
@@ -434,6 +436,16 @@ public final class ScreenFactories {
                 @Override
                 public void onBypassPathProtectionChanged(boolean enabled) {
                     controller.onBypassPathProtectionChanged(enabled);
+                }
+
+                @Override
+                public void onProxyApply(String host, int port) {
+                    controller.onProxySettingsChanged(host, port);
+                }
+
+                @Override
+                public void onProxyClear() {
+                    controller.onProxySettingsChanged("", 0);
                 }
             });
         }
