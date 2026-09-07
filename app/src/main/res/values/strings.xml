@@ -250,6 +250,23 @@
 
     <string name="screen_model_add_title_edit">Edit model</string>
     <string name="screen_model_add_title_add">Add model</string>
+    <string name="screen_model_add_field_protocol">Protocol</string>
+    <string name="screen_model_provider_form_add">Add provider</string>
+    <string name="screen_model_provider_form_edit">Edit provider</string>
+    <string name="screen_model_provider_slots_title">Model slots</string>
+    <string name="screen_model_provider_slot_hint_same">Same as main model if empty</string>
+    <string name="screen_model_provider_key_keep">Leave empty to keep the current key</string>
+    <string name="screen_model_provider_pick">Pick</string>
+    <string name="screen_model_provider_region">Region</string>
+    <string name="model_slot_main">Main</string>
+    <string name="model_slot_haiku">Haiku</string>
+    <string name="model_slot_sonnet">Sonnet</string>
+    <string name="model_slot_opus">Opus</string>
+    <string name="screen_model_add_query_catalog">Fetch models</string>
+    <string name="screen_model_add_fetch_ok">Model list fetched; tap Pick next to a slot</string>
+    <string name="screen_model_add_require_base_url">Base URL is required</string>
+    <string name="screen_model_add_require_model_id">Main model id is required</string>
+    <string name="screen_model_add_test_started">Testing main model…</string>
     <string name="screen_model_add_field_name">Name</string>
     <string name="screen_model_add_hint_name_optional">Optional, defaults to model ID</string>
     <string name="screen_model_add_field_base_url">Base URL</string>
@@ -347,6 +364,7 @@
     <string name="screen_models_add_slots_title">Add a model</string>
     <string name="screen_models_add_slot_hint">Configure base URL, key and model ids</string>
     <string name="screen_models_manage">Manage models</string>
+    <string name="screen_models_group_default">Default</string>
     <string name="screen_models_empty_readonly">No models yet. Please add OpenAI compatible, Codex or Anthropic models in model management first.</string>
     <string name="screen_models_delete_title">Delete model</string>
     <string name="screen_models_delete_message">Delete the selected %1$d model(s)?</string>

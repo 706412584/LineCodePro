@@ -9,6 +9,11 @@ public final class ModelConfig {
     public static final boolean DEFAULT_COMPRESSION_MODEL_AUTO = true;
     /** contextSize 字段未设置时的哨兵值，表示沿用旧 {@code {id}[{大小}]} 后缀解析或默认值。 */
     public static final int CONTEXT_SIZE_UNSET = 0;
+    /** 服务商分组槽位角色（cc-haha 语义：一个服务商 4 个模型槽位）。 */
+    public static final String SLOT_MAIN = "main";
+    public static final String SLOT_HAIKU = "haiku";
+    public static final String SLOT_SONNET = "sonnet";
+    public static final String SLOT_OPUS = "opus";
 
     private final String id;
     private final String name;
@@ -22,6 +27,8 @@ public final class ModelConfig {
     private final boolean compressionModelAuto;
     private final String compressionModelId;
     private final int contextSize;
+    private final String groupId;
+    private final String slotRole;
 
     /**
      * 显式带上 contextSize 的构造函数。新代码请优先使用 {@link Builder}。
@@ -43,6 +50,26 @@ public final class ModelConfig {
             String compressionModelId,
             int contextSize
     ) {
+        this(id, name, protocolType, providerLabel, baseUrl, apiKey, modelId, toolCallLimit,
+                compressionModelEnabled, compressionModelAuto, compressionModelId, contextSize, "", "");
+    }
+
+    public ModelConfig(
+            String id,
+            String name,
+            ModelProtocolType protocolType,
+            String providerLabel,
+            String baseUrl,
+            String apiKey,
+            String modelId,
+            int toolCallLimit,
+            boolean compressionModelEnabled,
+            boolean compressionModelAuto,
+            String compressionModelId,
+            int contextSize,
+            String groupId,
+            String slotRole
+    ) {
         this.id = Strings.nullToEmpty(id);
         this.name = Strings.nullToEmpty(name);
         this.protocolType = protocolType == null ? ModelProtocolType.OPENAI_COMPATIBLE : protocolType;
@@ -55,6 +82,8 @@ public final class ModelConfig {
         this.compressionModelAuto = compressionModelAuto;
         this.compressionModelId = Strings.nullToEmpty(compressionModelId).trim();
         this.contextSize = contextSize < 0 ? CONTEXT_SIZE_UNSET : contextSize;
+        this.groupId = Strings.nullToEmpty(groupId);
+        this.slotRole = Strings.nullToEmpty(slotRole);
     }
 
     private ModelConfig(Builder builder) {
@@ -70,6 +99,8 @@ public final class ModelConfig {
         this.compressionModelAuto = builder.compressionModelAuto;
         this.compressionModelId = Strings.nullToEmpty(builder.compressionModelId).trim();
         this.contextSize = builder.contextSize < 0 ? CONTEXT_SIZE_UNSET : builder.contextSize;
+        this.groupId = Strings.nullToEmpty(builder.groupId);
+        this.slotRole = Strings.nullToEmpty(builder.slotRole);
     }
 
     public static Builder builder(String id, String name, ModelProtocolType protocolType,
@@ -90,6 +121,8 @@ public final class ModelConfig {
         private boolean compressionModelAuto = DEFAULT_COMPRESSION_MODEL_AUTO;
         private String compressionModelId = "";
         private int contextSize = CONTEXT_SIZE_UNSET;
+        private String groupId = "";
+        private String slotRole = "";
 
         private Builder(String id, String name, ModelProtocolType protocolType,
                         String providerLabel, String baseUrl, String apiKey, String modelId) {
@@ -129,6 +162,16 @@ public final class ModelConfig {
 
         public Builder contextSize(int contextSize) {
             this.contextSize = contextSize;
+            return this;
+        }
+
+        public Builder groupId(String groupId) {
+            this.groupId = groupId;
+            return this;
+        }
+
+        public Builder slotRole(String slotRole) {
+            this.slotRole = slotRole;
             return this;
         }
 
@@ -189,6 +232,20 @@ public final class ModelConfig {
         return contextSize;
     }
 
+    /** 服务商分组 id；空串表示独立的单模型配置（旧数据）。 */
+    public String getGroupId() {
+        return groupId;
+    }
+
+    /** 槽位角色（main/haiku/sonnet/opus）；空串按 main 处理。 */
+    public String getSlotRole() {
+        return slotRole;
+    }
+
+    public String getEffectiveSlotRole() {
+        return slotRole.length() == 0 ? SLOT_MAIN : slotRole;
+    }
+
     public String getEffectiveCompressionModelId() {
         if (!compressionModelEnabled || compressionModelAuto || compressionModelId.length() == 0) {
             return modelId;
@@ -198,18 +255,24 @@ public final class ModelConfig {
 
     public ModelConfig withId(String nextId) {
         return new ModelConfig(nextId, name, protocolType, providerLabel, baseUrl, apiKey, modelId, toolCallLimit,
-                compressionModelEnabled, compressionModelAuto, compressionModelId, contextSize);
+                compressionModelEnabled, compressionModelAuto, compressionModelId, contextSize, groupId, slotRole);
     }
 
     public ModelConfig withModelId(String nextModelId) {
         return new ModelConfig(id, name, protocolType, providerLabel, baseUrl, apiKey, nextModelId, toolCallLimit,
-                compressionModelEnabled, compressionModelAuto, compressionModelId, contextSize);
+                compressionModelEnabled, compressionModelAuto, compressionModelId, contextSize, groupId, slotRole);
     }
 
     /** 返回一个更新了 contextSize 的副本。 */
     public ModelConfig withContextSize(int nextContextSize) {
         return new ModelConfig(id, name, protocolType, providerLabel, baseUrl, apiKey, modelId, toolCallLimit,
-                compressionModelEnabled, compressionModelAuto, compressionModelId, nextContextSize);
+                compressionModelEnabled, compressionModelAuto, compressionModelId, nextContextSize, groupId, slotRole);
+    }
+
+    public ModelConfig withGroup(String nextGroupId, String nextSlotRole) {
+        return new ModelConfig(id, name, protocolType, providerLabel, baseUrl, apiKey, modelId, toolCallLimit,
+                compressionModelEnabled, compressionModelAuto, compressionModelId, contextSize,
+                nextGroupId, nextSlotRole);
     }
 
     public JSONObject toJson() throws JSONException {
@@ -226,6 +289,8 @@ public final class ModelConfig {
         object.put("compressionModelAuto", compressionModelAuto);
         object.put("compressionModelId", compressionModelId);
         object.put("contextSize", contextSize);
+        object.put("groupId", groupId);
+        object.put("slotRole", slotRole);
         return object;
     }
 
@@ -274,7 +339,9 @@ public final class ModelConfig {
                 compressionModelEnabled,
                 compressionModelAuto,
                 compressionModelId,
-                contextSize
+                contextSize,
+                object.optString("groupId", ""),
+                object.optString("slotRole", "")
         );
     }
 

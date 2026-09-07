@@ -105,6 +105,16 @@ public final class ModelManagementControllerTest {
         public void deleteModels(List<String> ids) {
             deletedIds = ids;
         }
+
+        @Override
+        public List<cn.lineai.model.ModelConfig> saveGroup(List<cn.lineai.model.ModelConfig> group) {
+            return group == null ? java.util.Collections.emptyList() : group;
+        }
+
+        @Override
+        public List<cn.lineai.model.ModelConfig> getModelsInGroup(String groupId) {
+            return java.util.Collections.emptyList();
+        }
     }
 
     private static final class FakeHost implements ModelManagementController.Host {

@@ -925,6 +925,16 @@ public final class MainCoordinator implements MainUiController {
     }
 
     @Override
+    public void onProviderGroupSaved(List<ModelConfig> group) {
+        modelManagementController.saveGroup(group);
+    }
+
+    @Override
+    public List<ModelConfig> getModelsInGroup(String groupId) {
+        return modelManagementController.getModelsInGroup(groupId);
+    }
+
+    @Override
     public void onModelsDeleted(List<String> ids) {
         modelManagementController.deleteModels(ids);
     }

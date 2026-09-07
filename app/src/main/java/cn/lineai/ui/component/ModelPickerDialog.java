@@ -154,23 +154,19 @@ public final class ModelPickerDialog {
         scroll.addView(list, new ScrollView.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         panel.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // 按 provider 分组（LinkedHashMap 保序，选中组置顶）
-        LinkedHashMap<String, List<cn.lineai.model.ModelConfig>> selectedFirst = new LinkedHashMap<>();
-        LinkedHashMap<String, List<cn.lineai.model.ModelConfig>> rest = new LinkedHashMap<>();
-        for (cn.lineai.model.ModelConfig model : models) {
-            if (model == null) {
-                continue;
-            }
-            String provider = model.getProviderLabel() != null && model.getProviderLabel().length() > 0
-                    ? model.getProviderLabel()
-                    : model.getProtocolType().getLabel();
-            boolean isSelected = model.getId().equals(selectedConfigId);
-            (isSelected ? selectedFirst : rest).computeIfAbsent(provider, k -> new ArrayList<>()).add(model);
-        }
-        selectedFirst.putAll(rest);
-        for (List<cn.lineai.model.ModelConfig> groupModels : selectedFirst.values()) {
-            for (cn.lineai.model.ModelConfig model : groupModels) {
-                addGroupedRow(list, dialog, model, model.getId().equals(selectedConfigId), listener);
+        // 服务商分组（groupId 聚合，选中组置顶；组内按 modelId 去重合并角色标签）
+        List<cn.lineai.model.ModelGrouping.ProviderGroup> groups =
+                cn.lineai.model.ModelGrouping.groupForUi(models, selectedConfigId);
+        for (cn.lineai.model.ModelGrouping.ProviderGroup group : groups) {
+            addGroupedHeader(list, context, group.name, group.containsSelected);
+            List<cn.lineai.model.ModelGrouping.GroupedModel> groupedModels =
+                    cn.lineai.model.ModelGrouping.dedupeByModelId(group.models);
+            for (cn.lineai.model.ModelGrouping.GroupedModel grouped : groupedModels) {
+                cn.lineai.model.ModelConfig selectedSlot = grouped.findSelected(selectedConfigId);
+                // 展示行绑定组内第一个槽位（切换语义：点击 = 选中该模型行的 main 槽位优先）
+                cn.lineai.model.ModelConfig rowModel = selectedSlot != null ? selectedSlot : grouped.slots.get(0);
+                addGroupedRow(list, dialog, rowModel, selectedSlot != null,
+                        slotRolesLabel(context, grouped.getSlotRoles()), listener);
             }
         }
 
@@ -201,15 +197,58 @@ public final class ModelPickerDialog {
         }
     }
 
-    /** 分组选择器行：主行模型名，副行 model id · 协议，选中打勾。 */
+    /** 组头：服务商名 + 「默认」标记（选中组）。 */
+    private static void addGroupedHeader(LinearLayout list, Context context, String providerName, boolean isDefault) {
+        LinearLayout header = new LinearLayout(context);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        LineTheme.padding(header, LineTheme.LG, 8, LineTheme.LG, 2);
+        TextView name = LineTheme.text(context, providerName, LineTheme.FONT_XS,
+                isDefault ? LineTheme.ACCENT : LineTheme.TEXT_TERTIARY, Typeface.BOLD);
+        header.addView(name, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        if (isDefault) {
+            TextView mark = LineTheme.text(context,
+                    context.getString(R.string.screen_models_group_default),
+                    LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+            header.addView(mark, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        }
+        list.addView(header, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+    }
+
+    /** 角色标签合并文案（「主模型 · Sonnet」）。 */
+    private static String slotRolesLabel(Context context, List<String> roles) {
+        StringBuilder builder = new StringBuilder();
+        for (String role : roles) {
+            if (builder.length() > 0) {
+                builder.append(" · ");
+            }
+            builder.append(slotRoleLabel(context, role));
+        }
+        return builder.toString();
+    }
+
+    private static String slotRoleLabel(Context context, String role) {
+        if (cn.lineai.model.ModelConfig.SLOT_HAIKU.equals(role)) {
+            return context.getString(R.string.model_slot_haiku);
+        }
+        if (cn.lineai.model.ModelConfig.SLOT_SONNET.equals(role)) {
+            return context.getString(R.string.model_slot_sonnet);
+        }
+        if (cn.lineai.model.ModelConfig.SLOT_OPUS.equals(role)) {
+            return context.getString(R.string.model_slot_opus);
+        }
+        return context.getString(R.string.model_slot_main);
+    }
+
+    /** 分组选择器行：主行模型名，副行 model id · 角色标签，选中打勾。 */
     private static void addGroupedRow(LinearLayout list, Dialog dialog, cn.lineai.model.ModelConfig model,
-                                      boolean selected, OnGroupedModelSelectedListener listener) {
+                                      boolean selected, String rolesLabel, OnGroupedModelSelectedListener listener) {
         Context context = list.getContext();
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setClickable(true);
-        LineTheme.padding(row, LineTheme.LG, 12, LineTheme.LG, 12);
+        LineTheme.padding(row, LineTheme.LG, 10, LineTheme.LG, 10);
         row.setOnClickListener(v -> {
             dialog.dismiss();
             if (listener != null) {
@@ -229,8 +268,10 @@ public final class ModelPickerDialog {
         rowTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         info.addView(rowTitle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        TextView sub = LineTheme.text(context, model.getModelId() + " · " + model.getProtocolType().getLabel(),
-                LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+        String subText = rolesLabel.length() > 0
+                ? model.getModelId() + " · " + rolesLabel
+                : model.getModelId();
+        TextView sub = LineTheme.text(context, subText, LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
         sub.setSingleLine(true);
         sub.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);

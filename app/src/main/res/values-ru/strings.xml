@@ -250,6 +250,23 @@
 
     <string name="screen_model_add_title_edit">Редактировать модель</string>
     <string name="screen_model_add_title_add">Добавить модель</string>
+    <string name="screen_model_add_field_protocol">Протокол</string>
+    <string name="screen_model_provider_form_add">Добавить провайдера</string>
+    <string name="screen_model_provider_form_edit">Изменить провайдера</string>
+    <string name="screen_model_provider_slots_title">Слоты моделей</string>
+    <string name="screen_model_provider_slot_hint_same">Пусто = как основная модель</string>
+    <string name="screen_model_provider_key_keep">Оставьте пустым, чтобы сохранить текущий ключ</string>
+    <string name="screen_model_provider_pick">Выбрать</string>
+    <string name="screen_model_provider_region">Регион</string>
+    <string name="model_slot_main">Основная</string>
+    <string name="model_slot_haiku">Haiku</string>
+    <string name="model_slot_sonnet">Sonnet</string>
+    <string name="model_slot_opus">Opus</string>
+    <string name="screen_model_add_query_catalog">Получить модели</string>
+    <string name="screen_model_add_fetch_ok">Список моделей получен; нажмите «Выбрать» у слота</string>
+    <string name="screen_model_add_require_base_url">Укажите Base URL</string>
+    <string name="screen_model_add_require_model_id">Укажите ID основной модели</string>
+    <string name="screen_model_add_test_started">Тестирование основной модели…</string>
     <string name="screen_model_add_field_name">Имя</string>
     <string name="screen_model_add_hint_name_optional">Необязательно, по умолчанию Model ID</string>
     <string name="screen_model_add_field_base_url">Base URL</string>
@@ -347,6 +364,7 @@
     <string name="screen_models_add_slots_title">Добавить модель</string>
     <string name="screen_models_add_slot_hint">Настройте base URL, ключ и ID моделей</string>
     <string name="screen_models_manage">Управление моделями</string>
+    <string name="screen_models_group_default">По умолчанию</string>
     <string name="screen_models_empty_readonly">Пока нет моделей. Сначала добавьте OpenAI совместимую, Codex или Anthropic модель в управлении моделями.</string>
     <string name="screen_models_delete_title">Удалить модель</string>
     <string name="screen_models_delete_message">Удалить выбранные %1$d модель(и)?</string>

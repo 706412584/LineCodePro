@@ -136,8 +136,7 @@ public final class ScreenFactories {
             @Override
             public List<String> onFetchModelCatalog(cn.lineai.model.ModelProtocolType type, String baseUrl, String apiKey) throws Exception {
                 return catalogClient.fetch(type, baseUrl, apiKey);
-            }
-        });
+            }        });
     }
 
     // ===== Settings screens =====
@@ -894,6 +893,11 @@ public final class ScreenFactories {
                 }
 
                 @Override
+                public void onAddProvider(String presetId) {
+                    controller.onSettingsItemSelected("providerForm:" + presetId);
+                }
+
+                @Override
                 public void onSelectModel(String id) {
                     controller.onModelSelected(id);
                 }
@@ -901,6 +905,11 @@ public final class ScreenFactories {
                 @Override
                 public void onEditModel(String id) {
                     controller.onSettingsItemSelected("modelEdit:" + id);
+                }
+
+                @Override
+                public void onEditProviderGroup(String groupId) {
+                    controller.onSettingsItemSelected("providerEdit:" + groupId);
                 }
 
                 @Override
@@ -942,6 +951,14 @@ public final class ScreenFactories {
                 @Override
                 public void onDeleteModels(List<String> ids) {
                 }
+
+                @Override
+                public void onAddProvider(String presetId) {
+                }
+
+                @Override
+                public void onEditProviderGroup(String groupId) {
+                }
             });
         }
 
@@ -976,6 +993,14 @@ public final class ScreenFactories {
 
                 @Override
                 public void onDeleteModels(List<String> ids) {
+                }
+
+                @Override
+                public void onAddProvider(String presetId) {
+                }
+
+                @Override
+                public void onEditProviderGroup(String groupId) {
                 }
             });
         }
@@ -1086,6 +1111,80 @@ public final class ScreenFactories {
         public boolean matches(String id) {
             return id != null && id.startsWith(PREFIX);
         }
+    }
+
+    /** 服务商 4 槽位表单：新建（providerForm 或 providerForm:<presetId>）。 */
+    public static final class ProviderFormScreenFactory implements ScreenFactory {
+        private static final String PREFIX = "providerForm:";
+
+        @Override
+        public View createScreen(MainChatView view, MainUiController controller, Context context) {
+            String id = currentScreenId(view);
+            String presetId = id.length() > PREFIX.length() ? id.substring(PREFIX.length()) : "custom";
+            ModelProviderPreset preset = ModelProviderPresets.find(presetId);
+            if (preset == null) {
+                preset = ModelProviderPresets.CUSTOM;
+            }
+            return newProviderFormScreen(context, view, controller, preset, null);
+        }
+
+        @Override
+        public String screenId() {
+            return PREFIX;
+        }
+
+        @Override
+        public boolean matches(String id) {
+            return id != null && id.startsWith(PREFIX);
+        }
+    }
+
+    /** 服务商编辑：providerEdit:<groupId>。 */
+    public static final class ProviderEditScreenFactory implements ScreenFactory {
+        private static final String PREFIX = "providerEdit:";
+
+        @Override
+        public View createScreen(MainChatView view, MainUiController controller, Context context) {
+            String id = currentScreenId(view);
+            List<ModelConfig> group = controller.getModelsInGroup(id.substring(PREFIX.length()));
+            return newProviderFormScreen(context, view, controller, null, group);
+        }
+
+        @Override
+        public String screenId() {
+            return PREFIX;
+        }
+
+        @Override
+        public boolean matches(String id) {
+            return id != null && id.startsWith(PREFIX);
+        }
+    }
+
+    private static View newProviderFormScreen(Context context, MainChatView view, MainUiController controller,
+                                              ModelProviderPreset preset, List<ModelConfig> editingGroup) {
+        final cn.lineai.ai.protocol.ModelCatalogClient catalogClient = new cn.lineai.ai.protocol.ModelCatalogClient();
+        return new ProviderFormScreenView(context, preset, editingGroup, new ProviderFormScreenView.Listener() {
+            @Override
+            public void onBack() {
+                view.handleScreenBack();
+            }
+
+            @Override
+            public void onSaveGroup(List<ModelConfig> group) {
+                controller.onProviderGroupSaved(group);
+            }
+
+            @Override
+            public void onTest(ModelConfig mainSlotConfig) {
+                controller.onModelTest(mainSlotConfig);
+            }
+
+            @Override
+            public List<String> onFetchModelCatalog(cn.lineai.model.ModelProtocolType type, String baseUrl, String apiKey) throws Exception {
+                return catalogClient.fetch(type, baseUrl, apiKey);
+            }
+        });
     }
 
     // ===== Extension screens =====

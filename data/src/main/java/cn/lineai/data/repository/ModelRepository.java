@@ -227,6 +227,8 @@ public final class ModelRepository implements ModelStore {
         values.put("compression_model_auto", model.isCompressionModelAuto() ? 1 : 0);
         values.put("compression_model_id", model.getCompressionModelId());
         values.put("context_size", model.getContextSize());
+        values.put("group_id", model.getGroupId());
+        values.put("slot_role", model.getSlotRole());
         values.put("selected", selected ? 1 : 0);
         try {
             values.put("raw_json", model.toJson().toString());
@@ -249,6 +251,10 @@ public final class ModelRepository implements ModelStore {
         if (contextSizeIndex >= 0 && !cursor.isNull(contextSizeIndex)) {
             contextSize = cursor.getInt(contextSizeIndex);
         }
+        int groupIdIndex = cursor.getColumnIndex("group_id");
+        String groupId = groupIdIndex >= 0 ? cursor.getString(groupIdIndex) : "";
+        int slotRoleIndex = cursor.getColumnIndex("slot_role");
+        String slotRole = slotRoleIndex >= 0 ? cursor.getString(slotRoleIndex) : "";
         return new ModelConfig(
                 cursor.getString(cursor.getColumnIndexOrThrow("id")),
                 cursor.getString(cursor.getColumnIndexOrThrow("name")),
@@ -261,7 +267,9 @@ public final class ModelRepository implements ModelStore {
                 cursor.getInt(cursor.getColumnIndexOrThrow("compression_model_enabled")) == 1,
                 cursor.getInt(cursor.getColumnIndexOrThrow("compression_model_auto")) == 1,
                 cursor.getString(cursor.getColumnIndexOrThrow("compression_model_id")),
-                contextSize
+                contextSize,
+                groupId == null ? "" : groupId,
+                slotRole == null ? "" : slotRole
         );
     }
 
@@ -285,6 +293,99 @@ public final class ModelRepository implements ModelStore {
             db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN context_size INTEGER NOT NULL DEFAULT "
                     + ModelConfig.CONTEXT_SIZE_UNSET);
         }
+        if (!columns.contains("group_id")) {
+            db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN group_id TEXT NOT NULL DEFAULT ''");
+        }
+        if (!columns.contains("slot_role")) {
+            db.execSQL("ALTER TABLE " + TABLE + " ADD COLUMN slot_role TEXT NOT NULL DEFAULT ''");
+        }
+    }
+
+    /**
+     * 整组保存服务商（cc-haha 语义：一个服务商 = 同 group_id 的 1–4 行槽位）。
+     * 事务：删除旧组行 → 插入新行；若旧组中含当前选中行，选中重指到新 main 行。
+     * 各行 id 由本方法生成/保留（首行若带非空 id 且存在同组行则沿用语义见调用方）。
+     */
+    public synchronized List<ModelConfig> saveGroup(List<ModelConfig> group) {
+        if (group == null || group.isEmpty()) {
+            return new ArrayList<>();
+        }
+        String groupId = group.get(0).getGroupId();
+        if (groupId.length() == 0) {
+            groupId = "grp_" + System.currentTimeMillis();
+        }
+        String selectedId = getSelectedModelId();
+        boolean selectedInGroup = false;
+        for (ModelConfig model : getModelsInGroup(groupId)) {
+            if (model.getId().equals(selectedId)) {
+                selectedInGroup = true;
+                break;
+            }
+        }
+        SQLiteDatabase db = database.getWritableDatabase();
+        List<ModelConfig> saved = new ArrayList<>();
+        String mainId = "";
+        db.beginTransaction();
+        try {
+            db.delete(TABLE, "group_id = ?", new String[] {groupId});
+            long now = System.currentTimeMillis();
+            for (int i = 0; i < group.size(); i++) {
+                ModelConfig raw = group.get(i);
+                ModelConfig withGroup = raw.withGroup(groupId, raw.getSlotRole());
+                ModelConfig normalized = withGroup.getId().length() == 0
+                        ? withGroup.withId(String.valueOf(now + i))
+                        : withGroup;
+                boolean selected = selectedInGroup
+                        ? ModelConfig.SLOT_MAIN.equals(normalized.getEffectiveSlotRole())
+                        : isSelected(normalized.getId());
+                insertOrReplace(normalized, selected);
+                if (ModelConfig.SLOT_MAIN.equals(normalized.getEffectiveSlotRole())) {
+                    mainId = normalized.getId();
+                }
+                saved.add(normalized);
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        if (selectedInGroup && mainId.length() > 0) {
+            setSelectedModelId(mainId);
+        }
+        if (getSelectedModelId().length() == 0 && !saved.isEmpty()) {
+            setSelectedModelId(saved.get(0).getId());
+        }
+        return saved;
+    }
+
+    /** 读取指定组的全部槽位行（main 置顶）。 */
+    public synchronized List<ModelConfig> getModelsInGroup(String groupId) {
+        ArrayList<ModelConfig> models = new ArrayList<>();
+        if (groupId == null || groupId.length() == 0) {
+            return models;
+        }
+        Cursor cursor = database.getReadableDatabase().query(
+                TABLE, null, "group_id = ?", new String[] {groupId},
+                null, null, "updated_at ASC");
+        try {
+            while (cursor.moveToNext()) {
+                models.add(readModel(cursor));
+            }
+        } finally {
+            cursor.close();
+        }
+        // main 置顶，其余保序
+        ArrayList<ModelConfig> ordered = new ArrayList<>();
+        for (ModelConfig model : models) {
+            if (ModelConfig.SLOT_MAIN.equals(model.getEffectiveSlotRole())) {
+                ordered.add(model);
+            }
+        }
+        for (ModelConfig model : models) {
+            if (!ModelConfig.SLOT_MAIN.equals(model.getEffectiveSlotRole())) {
+                ordered.add(model);
+            }
+        }
+        return ordered;
     }
 
     private Set<String> tableColumns(SQLiteDatabase db, String table) {

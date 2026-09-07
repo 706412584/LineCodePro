@@ -30,9 +30,15 @@ public final class ModelListScreenView extends LinearLayout {
 
         void onAddModel();
 
+        /** 打开 4 槽位服务商表单（presetId 为空则自定义）。 */
+        void onAddProvider(String presetId);
+
         void onSelectModel(String id);
 
         void onEditModel(String id);
+
+        /** 编辑整个服务商组。 */
+        void onEditProviderGroup(String groupId);
 
         void onDeleteModels(List<String> ids);
     }
@@ -47,33 +53,6 @@ public final class ModelListScreenView extends LinearLayout {
     private final Set<String> multiSelectedIds = new HashSet<>();
     /** 服务商分组折叠状态：absent = 展开。多选模式下忽略折叠。 */
     private final Map<String, Boolean> groupCollapsed = new HashMap<>();
-
-    /** 分组结果：LinkedHashMap 保插入序，主模型组由调用方置顶。 */
-    static LinkedHashMap<String, List<ModelConfig>> groupModelsByProvider(
-            List<ModelConfig> models, String selectedModelId, java.util.function.Function<ModelConfig, String> providerOf) {
-        LinkedHashMap<String, List<ModelConfig>> groups = new LinkedHashMap<>();
-        String selectedGroupKey = null;
-        for (ModelConfig model : models) {
-            String key = providerOf.apply(model);
-            if (selectedGroupKey == null && selectedModelId != null && selectedModelId.equals(model.getId())) {
-                selectedGroupKey = key;
-            }
-        }
-        // 先放主模型组，再放其余（保持原有相对顺序）
-        for (ModelConfig model : models) {
-            String key = providerOf.apply(model);
-            if (key.equals(selectedGroupKey)) {
-                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(model);
-            }
-        }
-        for (ModelConfig model : models) {
-            String key = providerOf.apply(model);
-            if (!key.equals(selectedGroupKey)) {
-                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(model);
-            }
-        }
-        return groups;
-    }
 
     public ModelListScreenView(Context context, List<ModelConfig> models, String selectedModelId, Listener listener) {
         this(context, models, selectedModelId, context.getString(R.string.screen_models_title), true, listener);
@@ -164,17 +143,16 @@ public final class ModelListScreenView extends LinearLayout {
         }
 
         boolean multiSelect = !multiSelectedIds.isEmpty();
-        LinkedHashMap<String, List<ModelConfig>> groups =
-                groupModelsByProvider(models, selectedModelId, this::displayProvider);
-        for (Map.Entry<String, List<ModelConfig>> entry : groups.entrySet()) {
-            String provider = entry.getKey();
-            List<ModelConfig> groupModels = entry.getValue();
-            boolean selectedGroup = groupModels.stream().anyMatch(m -> m.getId().equals(selectedModelId));
-            addGroupHeader(context, provider, groupModels.size(), selectedGroup, multiSelect);
+        List<cn.lineai.model.ModelGrouping.ProviderGroup> groups =
+                cn.lineai.model.ModelGrouping.groupForUi(models, selectedModelId);
+        for (cn.lineai.model.ModelGrouping.ProviderGroup group : groups) {
+            String groupKey = group.groupId;
+            boolean selectedGroup = group.containsSelected;
+            addGroupHeader(context, group, selectedGroup, multiSelect);
             boolean collapsed = !multiSelect && !selectedGroup
-                    && Boolean.TRUE.equals(groupCollapsed.get(provider));
+                    && Boolean.TRUE.equals(groupCollapsed.get(groupKey));
             if (!collapsed) {
-                for (ModelConfig model : groupModels) {
+                for (ModelConfig model : group.models) {
                     addModel(list, model, selectedModelId.equals(model.getId()), multiSelectedIds.contains(model.getId()));
                 }
             }
@@ -184,8 +162,9 @@ public final class ModelListScreenView extends LinearLayout {
         }
     }
 
-    /** 组头：服务商名 + 数量 + 折叠 chevron（主模型组/多选模式不折叠）。 */
-    private void addGroupHeader(Context context, String provider, int count, boolean selectedGroup, boolean multiSelect) {
+    /** 组头：服务商名 + 数量 + 折叠 chevron；多槽位组长按进入编辑。 */
+    private void addGroupHeader(Context context, cn.lineai.model.ModelGrouping.ProviderGroup group,
+                                boolean selectedGroup, boolean multiSelect) {
         LinearLayout header = new LinearLayout(context);
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -193,26 +172,33 @@ public final class ModelListScreenView extends LinearLayout {
         header.setClickable(collapsible);
         if (collapsible) {
             header.setOnClickListener(v -> {
-                boolean nowCollapsed = !Boolean.TRUE.equals(groupCollapsed.get(provider));
-                groupCollapsed.put(provider, nowCollapsed);
+                boolean nowCollapsed = !Boolean.TRUE.equals(groupCollapsed.get(group.groupId));
+                groupCollapsed.put(group.groupId, nowCollapsed);
                 renderList();
+            });
+        }
+        // 多槽位组（groupId 非独立 solo 前缀）：长按编辑整组
+        if (allowManagement && !multiSelect && !group.groupId.startsWith("solo:")) {
+            header.setOnLongClickListener(v -> {
+                listener.onEditProviderGroup(group.groupId);
+                return true;
             });
         }
         LinearLayout.LayoutParams headerParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
         headerParams.bottomMargin = LineTheme.dp(context, LineTheme.SM);
         headerParams.topMargin = LineTheme.dp(context, LineTheme.SM);
 
-        TextView title = LineTheme.text(context, provider, LineTheme.FONT_SM,
+        TextView title = LineTheme.text(context, group.name, LineTheme.FONT_SM,
                 selectedGroup ? LineTheme.ACCENT : LineTheme.TEXT_SECONDARY, Typeface.BOLD);
         header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView countView = LineTheme.text(context, String.valueOf(count), LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+        TextView countView = LineTheme.text(context, String.valueOf(group.models.size()), LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
         LinearLayout.LayoutParams countParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         countParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
         header.addView(countView, countParams);
 
         if (collapsible) {
-            boolean collapsed = Boolean.TRUE.equals(groupCollapsed.get(provider));
+            boolean collapsed = Boolean.TRUE.equals(groupCollapsed.get(group.groupId));
             IconButtonView chevron = new IconButtonView(context, collapsed ? IconButtonView.CHEVRON_RIGHT : IconButtonView.CHEVRON_DOWN);
             chevron.setIconColor(LineTheme.TEXT_TERTIARY);
             chevron.setIconSizeDp(20, 14);
@@ -235,19 +221,19 @@ public final class ModelListScreenView extends LinearLayout {
         list.addView(slotsTitle, titleParams);
 
         Object[][] slots = {
-                {IconButtonView.MCP, cn.lineai.model.ModelProtocolType.OPENAI_COMPATIBLE.getLabel()},
-                {IconButtonView.SERVER, cn.lineai.model.ModelProtocolType.ANTHROPIC_MESSAGES.getLabel()},
-                {IconButtonView.SPARKLES, cn.lineai.model.ModelProtocolType.CODEX_RESPONSES.getLabel()},
-                {IconButtonView.CPU, context.getString(R.string.model_provider_local)},
+                {IconButtonView.MCP, cn.lineai.model.ModelProtocolType.OPENAI_COMPATIBLE.getLabel(), "custom"},
+                {IconButtonView.SERVER, cn.lineai.model.ModelProtocolType.ANTHROPIC_MESSAGES.getLabel(), "claude"},
+                {IconButtonView.SPARKLES, cn.lineai.model.ModelProtocolType.CODEX_RESPONSES.getLabel(), "codex"},
+                {IconButtonView.CPU, context.getString(R.string.model_provider_local), "custom"},
         };
-        for (Object[] slot : slots) {
+        for (final Object[] slot : slots) {
             LinearLayout row = new LinearLayout(context);
             row.setOrientation(HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setClickable(true);
             row.setBackground(LineTheme.roundedStroke(context, LineTheme.SURFACE_ELEVATED, 12, LineTheme.BORDER_LIGHT));
             LineTheme.padding(row, LineTheme.MD, LineTheme.MD, LineTheme.MD, LineTheme.MD);
-            row.setOnClickListener(v -> listener.onAddModel());
+            row.setOnClickListener(v -> listener.onAddProvider(String.valueOf(slot[2])));
             LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
             rowParams.bottomMargin = LineTheme.dp(context, LineTheme.SM);
 
@@ -329,7 +315,14 @@ public final class ModelListScreenView extends LinearLayout {
         TextView title = LineTheme.textMedium(context, model.getName(), LineTheme.FONT_MD, LineTheme.TEXT);
         title.setSingleLine(true);
         info.addView(title, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
-        TextView sub = LineTheme.text(context, model.getModelId(), LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+        // 副行：角色标签 · modelId（cc-haha 槽位语义；solo 单模型不显示角色）
+        String subText = model.getModelId();
+        if (model.getGroupId().length() > 0 && !ModelConfig.SLOT_MAIN.equals(model.getEffectiveSlotRole())) {
+            subText = slotRoleLabel(model.getEffectiveSlotRole()) + " · " + model.getModelId();
+        } else if (model.getGroupId().length() > 0) {
+            subText = slotRoleLabel(ModelConfig.SLOT_MAIN) + " · " + model.getModelId();
+        }
+        TextView sub = LineTheme.text(context, subText, LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
         sub.setSingleLine(true);
         LinearLayout.LayoutParams subParams = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
         subParams.topMargin = LineTheme.dp(context, 2);
@@ -494,6 +487,20 @@ public final class ModelListScreenView extends LinearLayout {
 
     private void addBottomInset(LinearLayout panel) {
         panel.setPadding(0, 0, 0, LineTheme.dp(panel.getContext(), 12));
+    }
+
+    private String slotRoleLabel(String role) {
+        Context context = getContext();
+        if (ModelConfig.SLOT_HAIKU.equals(role)) {
+            return context.getString(R.string.model_slot_haiku);
+        }
+        if (ModelConfig.SLOT_SONNET.equals(role)) {
+            return context.getString(R.string.model_slot_sonnet);
+        }
+        if (ModelConfig.SLOT_OPUS.equals(role)) {
+            return context.getString(R.string.model_slot_opus);
+        }
+        return context.getString(R.string.model_slot_main);
     }
 
     private String displayProvider(ModelConfig model) {

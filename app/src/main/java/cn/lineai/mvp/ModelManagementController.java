@@ -24,6 +24,10 @@ public final class ModelManagementController {
         ModelConfig save(ModelConfig model);
 
         void deleteModels(List<String> ids);
+
+        List<ModelConfig> saveGroup(List<ModelConfig> group);
+
+        List<ModelConfig> getModelsInGroup(String groupId);
     }
 
     private static final class RepositoryModelStore implements ModelStore {
@@ -62,6 +66,16 @@ public final class ModelManagementController {
         public void deleteModels(List<String> ids) {
             modelStore.deleteModels(ids);
         }
+
+        @Override
+        public List<ModelConfig> saveGroup(List<ModelConfig> group) {
+            return modelStore.saveGroup(group);
+        }
+
+        @Override
+        public List<ModelConfig> getModelsInGroup(String groupId) {
+            return modelStore.getModelsInGroup(groupId);
+        }
     }
 
     private final ModelStore modelStore;
@@ -99,6 +113,20 @@ public final class ModelManagementController {
         modelStore.setSelectedModelId(saved.getId());
         host.returnToModelsScreen();
         host.render();
+    }
+
+    /** 服务商整组保存：选中重指到该组 main 行（cc-haha 激活语义）。 */
+    public void saveGroup(List<ModelConfig> group) {
+        List<ModelConfig> saved = modelStore.saveGroup(group);
+        if (!saved.isEmpty()) {
+            modelStore.setSelectedModelId(saved.get(0).getId());
+        }
+        host.returnToModelsScreen();
+        host.render();
+    }
+
+    public List<ModelConfig> getModelsInGroup(String groupId) {
+        return modelStore.getModelsInGroup(groupId);
     }
 
     public void deleteModels(List<String> ids) {

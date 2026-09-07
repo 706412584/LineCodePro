@@ -250,6 +250,23 @@
 
     <string name="screen_model_add_title_edit">修改模型</string>
     <string name="screen_model_add_title_add">添加模型</string>
+    <string name="screen_model_add_field_protocol">协议</string>
+    <string name="screen_model_provider_form_add">添加服务商</string>
+    <string name="screen_model_provider_form_edit">编辑服务商</string>
+    <string name="screen_model_provider_slots_title">模型槽位</string>
+    <string name="screen_model_provider_slot_hint_same">留空则与主模型相同</string>
+    <string name="screen_model_provider_key_keep">留空保持当前密钥不变</string>
+    <string name="screen_model_provider_pick">选择</string>
+    <string name="screen_model_provider_region">区域</string>
+    <string name="model_slot_main">主模型</string>
+    <string name="model_slot_haiku">Haiku 模型</string>
+    <string name="model_slot_sonnet">Sonnet 模型</string>
+    <string name="model_slot_opus">Opus 模型</string>
+    <string name="screen_model_add_query_catalog">拉取模型目录</string>
+    <string name="screen_model_add_fetch_ok">模型目录已获取，点槽位旁「选择」填入</string>
+    <string name="screen_model_add_require_base_url">请填写 Base URL</string>
+    <string name="screen_model_add_require_model_id">请填写主模型 ID</string>
+    <string name="screen_model_add_test_started">正在测试主模型…</string>
     <string name="screen_model_add_field_name">名称</string>
     <string name="screen_model_add_hint_name_optional">可留空，默认使用模型 ID</string>
     <string name="screen_model_add_field_base_url">Base URL</string>
@@ -347,6 +364,7 @@
     <string name="screen_models_add_slots_title">添加模型</string>
     <string name="screen_models_add_slot_hint">配置 Base URL、密钥与模型 ID</string>
     <string name="screen_models_manage">管理模型</string>
+    <string name="screen_models_group_default">默认</string>
     <string name="screen_models_empty_readonly">还没有模型。请先在模型管理中添加 OpenAI 兼容、Codex 或 Anthropic 模型。</string>
     <string name="screen_models_delete_title">删除模型</string>
     <string name="screen_models_delete_message">确定删除 %1$d 个模型？</string>
