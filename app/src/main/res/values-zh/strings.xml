@@ -262,7 +262,11 @@
     <string name="model_slot_haiku">Haiku 模型</string>
     <string name="model_slot_sonnet">Sonnet 模型</string>
     <string name="model_slot_opus">Opus 模型</string>
-    <string name="screen_model_add_query_catalog">拉取模型目录</string>
+    <string name="screen_model_add_query_catalog">获取模型</string>
+    <string name="common_search">搜索</string>
+    <string name="screen_model_add_search_empty">没有匹配的模型</string>
+    <string name="screen_models_action_edit_provider">编辑服务商</string>
+    <string name="screen_models_action_edit_provider_desc">编辑该服务商的全部四个模型槽位</string>
     <string name="screen_model_add_fetch_ok">模型目录已获取，点槽位旁「选择」填入</string>
     <string name="screen_model_add_require_base_url">请填写 Base URL</string>
     <string name="screen_model_add_require_model_id">请填写主模型 ID</string>

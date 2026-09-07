@@ -262,7 +262,11 @@
     <string name="model_slot_haiku">Haiku</string>
     <string name="model_slot_sonnet">Sonnet</string>
     <string name="model_slot_opus">Opus</string>
-    <string name="screen_model_add_query_catalog">Fetch models</string>
+    <string name="screen_model_add_query_catalog">Get models</string>
+    <string name="common_search">Search</string>
+    <string name="screen_model_add_search_empty">No matching models</string>
+    <string name="screen_models_action_edit_provider">Edit provider</string>
+    <string name="screen_models_action_edit_provider_desc">Edit all four model slots of this provider</string>
     <string name="screen_model_add_fetch_ok">Model list fetched; tap Pick next to a slot</string>
     <string name="screen_model_add_require_base_url">Base URL is required</string>
     <string name="screen_model_add_require_model_id">Main model id is required</string>

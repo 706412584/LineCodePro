@@ -149,8 +149,9 @@ public final class ModelListScreenView extends LinearLayout {
             String groupKey = group.groupId;
             boolean selectedGroup = group.containsSelected;
             addGroupHeader(context, group, selectedGroup, multiSelect);
+            // 默认折叠只显主模型行；selected 组与多选模式强制展开
             boolean collapsed = !multiSelect && !selectedGroup
-                    && Boolean.TRUE.equals(groupCollapsed.get(groupKey));
+                    && !Boolean.FALSE.equals(groupCollapsed.get(groupKey));
             if (!collapsed) {
                 for (ModelConfig model : group.models) {
                     addModel(list, model, selectedModelId.equals(model.getId()), multiSelectedIds.contains(model.getId()));
@@ -172,7 +173,8 @@ public final class ModelListScreenView extends LinearLayout {
         header.setClickable(collapsible);
         if (collapsible) {
             header.setOnClickListener(v -> {
-                boolean nowCollapsed = !Boolean.TRUE.equals(groupCollapsed.get(group.groupId));
+                // 默认折叠：FALSE=已展开；点击切换（absent=折叠态）
+                boolean nowCollapsed = Boolean.FALSE.equals(groupCollapsed.get(group.groupId));
                 groupCollapsed.put(group.groupId, nowCollapsed);
                 renderList();
             });
@@ -198,7 +200,7 @@ public final class ModelListScreenView extends LinearLayout {
         header.addView(countView, countParams);
 
         if (collapsible) {
-            boolean collapsed = Boolean.TRUE.equals(groupCollapsed.get(group.groupId));
+            boolean collapsed = !Boolean.FALSE.equals(groupCollapsed.get(group.groupId));
             IconButtonView chevron = new IconButtonView(context, collapsed ? IconButtonView.CHEVRON_RIGHT : IconButtonView.CHEVRON_DOWN);
             chevron.setIconColor(LineTheme.TEXT_TERTIARY);
             chevron.setIconSizeDp(20, 14);
@@ -357,9 +359,14 @@ public final class ModelListScreenView extends LinearLayout {
         addHandle(panel);
         addSheetTitle(panel, model.getName().length() == 0 ? context.getString(R.string.screen_models_title) : model.getName());
         addDivider(panel);
+        // 修改 = 编辑整个服务商（4 槽位）；无组老数据经组聚合键也能定位到同服务商的全部行
         addActionRow(panel, context.getString(R.string.screen_models_action_modify), context.getString(R.string.screen_models_action_modify_desc), () -> {
             dialog.dismiss();
             listener.onEditModel(model.getId());
+        });
+        addActionRow(panel, context.getString(R.string.screen_models_action_edit_provider), context.getString(R.string.screen_models_action_edit_provider_desc), () -> {
+            dialog.dismiss();
+            listener.onEditProviderGroup(groupKeyOf(model));
         });
         addActionRow(panel, context.getString(R.string.screen_models_action_multi_select), context.getString(R.string.screen_models_action_multi_select_desc), () -> {
             dialog.dismiss();
@@ -367,6 +374,14 @@ public final class ModelListScreenView extends LinearLayout {
         });
         addBottomInset(panel);
         showBottomDialog(dialog, panel);
+    }
+
+    /** 行 → 所属组键（正式组 groupId；老数据 solo 键 = providerLabel@baseUrl）。 */
+    private String groupKeyOf(ModelConfig model) {
+        if (model.getGroupId().length() > 0) {
+            return model.getGroupId();
+        }
+        return "solo:" + model.getProviderLabel() + "@" + model.getBaseUrl();
     }
 
     private void showDeleteConfirm() {

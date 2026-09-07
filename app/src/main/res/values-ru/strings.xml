@@ -263,6 +263,10 @@
     <string name="model_slot_sonnet">Sonnet</string>
     <string name="model_slot_opus">Opus</string>
     <string name="screen_model_add_query_catalog">Получить модели</string>
+    <string name="common_search">Поиск</string>
+    <string name="screen_model_add_search_empty">Нет подходящих моделей</string>
+    <string name="screen_models_action_edit_provider">Изменить провайдера</string>
+    <string name="screen_models_action_edit_provider_desc">Изменить все четыре слота моделей этого провайдера</string>
     <string name="screen_model_add_fetch_ok">Список моделей получен; нажмите «Выбрать» у слота</string>
     <string name="screen_model_add_require_base_url">Укажите Base URL</string>
     <string name="screen_model_add_require_model_id">Укажите ID основной модели</string>

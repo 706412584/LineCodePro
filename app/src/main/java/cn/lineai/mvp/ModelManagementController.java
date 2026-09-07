@@ -1,6 +1,7 @@
 package cn.lineai.mvp;
 
 import cn.lineai.model.ModelConfig;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class ModelManagementController {
@@ -126,6 +127,22 @@ public final class ModelManagementController {
     }
 
     public List<ModelConfig> getModelsInGroup(String groupId) {
+        if (groupId != null && groupId.startsWith("solo:")) {
+            // 老数据聚合键 solo:<providerLabel>@<baseUrl>：按服务商名+地址过滤，
+            // 编辑后保存为正式组（升级语义）
+            String[] parts = groupId.substring("solo:".length()).split("@", 2);
+            String label = parts.length > 0 ? parts[0] : "";
+            String baseUrl = parts.length > 1 ? parts[1] : "";
+            List<ModelConfig> result = new ArrayList<>();
+            for (ModelConfig model : modelStore.getModels()) {
+                if (model.getGroupId().length() == 0
+                        && model.getProviderLabel().equals(label)
+                        && model.getBaseUrl().equals(baseUrl)) {
+                    result.add(model);
+                }
+            }
+            return result;
+        }
         return modelStore.getModelsInGroup(groupId);
     }
 

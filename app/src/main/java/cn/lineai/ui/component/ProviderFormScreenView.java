@@ -63,6 +63,7 @@ public final class ProviderFormScreenView extends ScreenScaffoldView {
     private final EditText apiKeyInput;
     private final LinearLayout regionHost;
     private final EditText[] slotInputs = new EditText[4];
+    private final IconButtonView[] dropArrows = new IconButtonView[4];
     private final TextView saveAction;
     private final TextView testAction;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -152,23 +153,28 @@ public final class ProviderFormScreenView extends ScreenScaffoldView {
         };
         for (int i = 0; i < 4; i++) {
             form.addView(label(context, context.getString(slotLabels[i]) + (i == 0 ? " *" : "")));
-            LinearLayout slotRow = new LinearLayout(context);
-            slotRow.setOrientation(HORIZONTAL);
-            slotRow.setGravity(Gravity.CENTER_VERTICAL);
+            // 输入框 + 右上角内嵌下拉箭头（拉取目录后出现；全部 4 槽位均可选）
+            android.widget.FrameLayout slotBox = new android.widget.FrameLayout(context);
             slotInputs[i] = ModelFormHelper.input(context, editingSlots[i],
                     i == 0 ? context.getString(R.string.screen_model_add_hint_model_id)
                             : context.getString(R.string.screen_model_provider_slot_hint_same),
                     false, false);
-            slotRow.addView(slotInputs[i], new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f));
-            if (i > 0) {
-                TextView pick = actionText(context, context.getString(R.string.screen_model_provider_pick), LineTheme.TEXT_SECONDARY);
-                final int slotIndex = i;
-                pick.setOnClickListener(v -> pickModelForSlot(slotIndex));
-                LinearLayout.LayoutParams pickParams = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-                pickParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
-                slotRow.addView(pick, pickParams);
-            }
-            form.addView(slotRow, fieldParams(context));
+            slotBox.addView(slotInputs[i], new android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT));
+            final int slotIndex = i;
+            dropArrows[i] = new IconButtonView(context, IconButtonView.CHEVRON_DOWN);
+            dropArrows[i].setIconColor(LineTheme.TEXT_TERTIARY);
+            dropArrows[i].setIconSizeDp(18, 14);
+            dropArrows[i].setVisibility(fetchedModelIds.isEmpty() ? View.GONE : View.VISIBLE);
+            dropArrows[i].setOnClickListener(v -> pickModelForSlot(slotIndex));
+            android.widget.FrameLayout.LayoutParams arrowParams = new android.widget.FrameLayout.LayoutParams(
+                    LineTheme.dp(context, 30), LineTheme.dp(context, 30), Gravity.END | Gravity.TOP);
+            arrowParams.topMargin = LineTheme.dp(context, 7);
+            arrowParams.rightMargin = LineTheme.dp(context, 4);
+            dropArrows[i].setBackground(LineTheme.rounded(context, android.graphics.Color.TRANSPARENT, 6));
+            slotBox.addView(dropArrows[i], arrowParams);
+            form.addView(slotBox, fieldParams(context));
         }
 
         // ===== 底部操作 =====
@@ -339,6 +345,7 @@ public final class ProviderFormScreenView extends ScreenScaffoldView {
                     if (fetchedModelIds.isEmpty()) {
                         toast(R.string.screen_model_add_fetch_failed);
                     } else {
+                        updateDropArrows();
                         toast(R.string.screen_model_add_fetch_ok);
                     }
                 });
@@ -351,13 +358,22 @@ public final class ProviderFormScreenView extends ScreenScaffoldView {
         }, "linecode-provider-catalog").start();
     }
 
-    /** 目录单选填入指定槽位。 */
+    /** 槽位输入框右上角下拉箭头显隐（有目录数据才出现）。 */
+    private void updateDropArrows() {
+        for (IconButtonView arrow : dropArrows) {
+            if (arrow != null) {
+                arrow.setVisibility(fetchedModelIds.isEmpty() ? View.GONE : View.VISIBLE);
+            }
+        }
+    }
+
+    /** 目录单选（可搜索）填入指定槽位。 */
     private void pickModelForSlot(int slotIndex) {
         if (fetchedModelIds.isEmpty()) {
             fetchModels();
             return;
         }
-        ModelPickerDialog.show(getContext(), fetchedModelIds, valueOf(slotInputs[slotIndex]),
+        ModelPickerDialog.showSearchable(getContext(), fetchedModelIds, valueOf(slotInputs[slotIndex]),
                 (modelId, custom) -> slotInputs[slotIndex].setText(custom ? "" : modelId));
     }
 

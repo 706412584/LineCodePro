@@ -339,6 +339,93 @@ public final class ModelPickerDialog {
         }
     }
 
+    /** 可搜索的模型单选（槽位下拉用）：顶部搜索框实时过滤，无「自定义」尾行。 */
+    public static void showSearchable(Context context, List<String> modelIds, String selectedId,
+                                       OnModelSelectedListener listener) {
+        Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setCanceledOnTouchOutside(true);
+
+        LinearLayout panel = new LinearLayout(context);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(LineTheme.roundedTop(context, LineTheme.SURFACE_ELEVATED, 16));
+
+        View handle = new View(context);
+        handle.setBackground(LineTheme.rounded(context, LineTheme.TEXT_TERTIARY, 2));
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(LineTheme.dp(context, 36), LineTheme.dp(context, 4));
+        handleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        handleParams.topMargin = LineTheme.dp(context, LineTheme.SM);
+        handleParams.bottomMargin = LineTheme.dp(context, LineTheme.XS);
+        panel.addView(handle, handleParams);
+
+        TextView title = LineTheme.text(context, context.getString(R.string.screen_model_add_picker_title),
+                LineTheme.FONT_LG, LineTheme.TEXT, Typeface.BOLD);
+        LineTheme.padding(title, LineTheme.LG, 0, LineTheme.LG, LineTheme.SM);
+        panel.addView(title, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        android.widget.EditText search = new android.widget.EditText(context);
+        search.setHint(context.getString(R.string.common_search));
+        search.setHintTextColor(LineTheme.TEXT_TERTIARY);
+        search.setTextColor(LineTheme.TEXT);
+        search.setTextSize(LineTheme.FONT_MD);
+        search.setSingleLine(true);
+        search.setBackground(LineTheme.roundedStroke(context, LineTheme.SURFACE_LIGHT, 8, LineTheme.BORDER_LIGHT));
+        search.setPadding(LineTheme.dp(context, LineTheme.MD), LineTheme.dp(context, LineTheme.SM),
+                LineTheme.dp(context, LineTheme.MD), LineTheme.dp(context, LineTheme.SM));
+        LinearLayout.LayoutParams searchParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        searchParams.leftMargin = LineTheme.dp(context, LineTheme.LG);
+        searchParams.rightMargin = LineTheme.dp(context, LineTheme.LG);
+        searchParams.bottomMargin = LineTheme.dp(context, LineTheme.SM);
+        panel.addView(search, searchParams);
+
+        ScrollView scroll = new cn.lineai.ui.theme.BoundedScrollView(context, 420);
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list, new ScrollView.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        panel.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        Runnable[] rebuild = new Runnable[1];
+        rebuild[0] = () -> {
+            list.removeAllViews();
+            String query = search.getText().toString().trim().toLowerCase();
+            int shown = 0;
+            for (String id : modelIds) {
+                if (query.length() > 0 && !id.toLowerCase().contains(query)) {
+                    continue;
+                }
+                addRow(list, dialog, id, id.equals(selectedId), false, listener);
+                shown++;
+            }
+            if (shown == 0) {
+                TextView empty = LineTheme.text(context,
+                        context.getString(R.string.screen_model_add_search_empty),
+                        LineTheme.FONT_SM, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+                empty.setGravity(Gravity.CENTER);
+                LineTheme.padding(empty, LineTheme.LG, LineTheme.LG, LineTheme.LG, LineTheme.LG);
+                list.addView(empty, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            }
+        };
+        rebuild[0].run();
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(android.text.Editable s) {
+                rebuild[0].run();
+            }
+        });
+        panel.setPadding(0, 0, 0, LineTheme.dp(context, 12));
+
+        dialog.setContentView(panel);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+            window.setLayout(DialogDimensions.insetDialogWidth(context), LinearLayout.LayoutParams.WRAP_CONTENT);
+            window.setGravity(Gravity.BOTTOM);
+        }
+    }
+
     private static void addRow(LinearLayout list, Dialog dialog, String label, boolean selected, boolean custom, OnModelSelectedListener listener) {
         Context context = list.getContext();
         LinearLayout row = new LinearLayout(context);
