@@ -44,10 +44,24 @@ public final class ShellExecuteToolLinuxRoutingTest {
         Assert.assertTrue(settings.isLinuxEnvEnabled());
     }
 
-    /** 最小 ToolSettingsStore fake：只承载 execution mode 与 Linux 开关。 */
+    @Test
+    public void activeDistroIdDefaultsToAlpineAndPersists() {
+        RecordingSettings settings = new RecordingSettings();
+        // 默认 alpine（与历史行为一致）
+        Assert.assertEquals("alpine", settings.getActiveDistroId());
+        settings.setActiveDistroId("ubuntu");
+        Assert.assertEquals("ubuntu", settings.getActiveDistroId());
+        settings.setActiveDistroId("");
+        Assert.assertEquals("alpine", settings.getActiveDistroId());
+        settings.setActiveDistroId(null);
+        Assert.assertEquals("alpine", settings.getActiveDistroId());
+    }
+
+    /** 最小 ToolSettingsStore fake：只承载 execution mode 与 Linux 开关/发行版。 */
     private static final class RecordingSettings implements ToolSettingsStore {
         boolean linuxEnvEnabled;
         String executionMode = ToolSettingsStore.EXECUTION_LOCAL;
+        String activeDistroId = "alpine";
 
         @Override
         public String getPermissionMode() {
@@ -76,6 +90,16 @@ public final class ShellExecuteToolLinuxRoutingTest {
         @Override
         public void setLinuxEnvEnabled(boolean enabled) {
             linuxEnvEnabled = enabled;
+        }
+
+        @Override
+        public String getActiveDistroId() {
+            return activeDistroId;
+        }
+
+        @Override
+        public void setActiveDistroId(String distroId) {
+            activeDistroId = distroId == null || distroId.length() == 0 ? "alpine" : distroId;
         }
 
         @Override

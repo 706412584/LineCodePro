@@ -630,6 +630,10 @@
     <string name="screen_mcp_linux_phase_extract">解压中…</string>
     <string name="screen_mcp_linux_phase_configure">配置中…</string>
     <string name="screen_mcp_linux_phase_tools">安装工具包（git 等）…</string>
+    <string name="screen_mcp_linux_active_distro">当前发行版：%1$s（点击切换）</string>
+    <string name="screen_mcp_linux_distro_picker_title">选择发行版</string>
+    <string name="screen_mcp_linux_distro_size">rootfs 下载约 %1$s</string>
+    <string name="screen_mcp_linux_distro_unavailable">后续版本提供</string>
     <string name="screen_security_section_proxy">网络代理</string>
     <string name="screen_security_proxy_host">代理地址</string>
     <string name="screen_security_proxy_port">代理端口</string>

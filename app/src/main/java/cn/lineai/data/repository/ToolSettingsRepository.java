@@ -176,6 +176,17 @@ public final class ToolSettingsRepository implements ToolSettingsStore {
     }
 
     @Override
+    public synchronized String getActiveDistroId() {
+        return settingsRepository.getString(KEY_LINUX_ACTIVE_DISTRO, "alpine");
+    }
+
+    @Override
+    public synchronized void setActiveDistroId(String distroId) {
+        settingsRepository.setString(KEY_LINUX_ACTIVE_DISTRO,
+                distroId == null || distroId.length() == 0 ? "alpine" : distroId);
+    }
+
+    @Override
     public synchronized String getProxyUrl() {
         return new ProxySettingsRepository(settingsRepository).getProxyUrl();
     }

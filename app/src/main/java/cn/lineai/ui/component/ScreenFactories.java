@@ -348,6 +348,12 @@ public final class ScreenFactories {
                     controller.onLinuxEnvDeleteRequested();
                     view.showScreen(currentScreenId(view));
                 }
+
+                @Override
+                public void onLinuxDistroSelected(String distroId) {
+                    controller.onLinuxDistroSelected(distroId);
+                    view.showScreen(currentScreenId(view));
+                }
             });
         }
 

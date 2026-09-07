@@ -724,6 +724,10 @@
     <string name="screen_mcp_linux_phase_extract">Распаковка rootfs…</string>
     <string name="screen_mcp_linux_phase_configure">Настройка среды…</string>
     <string name="screen_mcp_linux_phase_tools">Установка пакетов инструментов (git и др.)…</string>
+    <string name="screen_mcp_linux_active_distro">Текущий дистрибутив: %1$s (нажмите для смены)</string>
+    <string name="screen_mcp_linux_distro_picker_title">Выбор дистрибутива</string>
+    <string name="screen_mcp_linux_distro_size">загрузка rootfs ~%1$s</string>
+    <string name="screen_mcp_linux_distro_unavailable">Появится в следующей версии</string>
     <string name="screen_security_section_proxy">Сетевой прокси</string>
     <string name="screen_security_proxy_host">Адрес прокси</string>
     <string name="screen_security_proxy_port">Порт прокси</string>

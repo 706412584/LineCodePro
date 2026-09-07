@@ -37,6 +37,9 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         void onLinuxEnvInstallRequested();
 
         void onLinuxEnvDeleteRequested();
+
+        /** 选择当前激活的 Linux 发行版（底单回调）。 */
+        void onLinuxDistroSelected(String distroId);
     }
 
     private final Listener listener;
@@ -128,7 +131,23 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         String rest = envState.contains(":") ? envState.substring(envState.indexOf(':') + 1) : "";
         boolean installing = "installing".equals(baseState);
         boolean failed = "failed".equals(baseState);
-        boolean unsupported = "unsupported".equals(baseState);
+
+        // 当前激活发行版行（点击弹选择底单；安装中禁用）
+        TextView distroRow = LineTheme.text(context,
+                context.getString(R.string.screen_mcp_linux_active_distro, activeDistroLabel()),
+                LineTheme.FONT_SM, LineTheme.TEXT, Typeface.BOLD);
+        distroRow.setGravity(Gravity.CENTER_VERTICAL);
+        distroRow.setMinimumHeight(LineTheme.dp(context, 44));
+        if (!installing) {
+            distroRow.setClickable(true);
+            distroRow.setOnClickListener(v -> showDistroPicker());
+        } else {
+            distroRow.setAlpha(0.6f);
+        }
+        LinearLayout.LayoutParams distroParams = new LinearLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+        distroParams.topMargin = LineTheme.dp(context, LineTheme.SM);
+        card.addView(distroRow, distroParams);
 
         String statusText = linuxStatusText(context, baseState, installing ? rest : "");
         TextView status = desc(context, statusText);
@@ -136,7 +155,7 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         statusParams.topMargin = LineTheme.dp(context, LineTheme.SM);
         card.addView(status, statusParams);
 
-        if ((failed || unsupported) && rest.length() > 0) {
+        if (failed && rest.length() > 0) {
             TextView error = LineTheme.text(context,
                     context.getString(R.string.screen_mcp_linux_error_prefix) + rest,
                     LineTheme.FONT_XS, LineTheme.DANGER, android.graphics.Typeface.NORMAL);
@@ -208,6 +227,57 @@ public final class MCPSettingsScreenView extends ScreenScaffoldView {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LineTheme.dp(context, 42));
         params.topMargin = LineTheme.dp(context, LineTheme.SM);
         return params;
+    }
+
+    /** 当前激活发行版的显示名（未知 id 回退显示原值）。 */
+    private String activeDistroLabel() {
+        for (cn.lineai.ipc.terminal.LinuxDistro distro : cn.lineai.ipc.terminal.LinuxDistro.values()) {
+            if (distro.id.equals(state.getLinuxActiveDistroId())) {
+                return distro.displayName + " " + distro.version;
+            }
+        }
+        return state.getLinuxActiveDistroId();
+    }
+
+    /** 发行版选择底单（DialogBuilder 底部弹层，当前项高亮）。 */
+    private void showDistroPicker() {
+        Context context = getContext();
+        android.app.Dialog dialog = DialogBuilder.create(context);
+        LinearLayout panel = new LinearLayout(context);
+        panel.setOrientation(VERTICAL);
+        LineTheme.padding(panel, 24, 24, 24, 24);
+        TextView heading = LineTheme.textMedium(context,
+                context.getString(R.string.screen_mcp_linux_distro_picker_title), 22, LineTheme.TEXT);
+        panel.addView(heading, new LayoutParams(LayoutParams.MATCH_PARENT, LineTheme.dp(context, 52)));
+        String activeId = state.getLinuxActiveDistroId();
+        for (cn.lineai.ipc.terminal.LinuxDistro distro : cn.lineai.ipc.terminal.LinuxDistro.availableDistros()) {
+            final String id = distro.id;
+            String subtitle = distro.available
+                    ? (LinuxRootfsSizeHint.isKnown(id)
+                        ? context.getString(R.string.screen_mcp_linux_distro_size, LinuxRootfsSizeHint.sizeLabel(id))
+                        : "")
+                    : context.getString(R.string.screen_mcp_linux_distro_unavailable);
+            panel.addView(new OptionRowView(context, IconButtonView.SERVER,
+                    distro.displayName + " " + distro.version, subtitle,
+                    id.equals(activeId), () -> {
+                        dialog.dismiss();
+                        if (!id.equals(activeId)) {
+                            listener.onLinuxDistroSelected(id);
+                        }
+                    }), new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        }
+        DialogBuilder.showBottomSheet(dialog, panel);
+    }
+
+    /** 发行版下载体积提示（仅展示用；与 LinuxDistro 的镜像列表解耦）。 */
+    private static final class LinuxRootfsSizeHint {
+        static boolean isKnown(String id) {
+            return "alpine".equals(id) || "ubuntu".equals(id);
+        }
+
+        static String sizeLabel(String id) {
+            return "alpine".equals(id) ? "~4MB" : "~28MB";
+        }
     }
 
     private void addToolCards(LinearLayout content) {

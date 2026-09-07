@@ -25,4 +25,7 @@ public interface McpSettingsController {
     void onLinuxEnvInstallRequested();
 
     void onLinuxEnvDeleteRequested();
+
+    /** 选择当前激活的 Linux 发行版（alpine / ubuntu）。 */
+    void onLinuxDistroSelected(String distroId);
 }

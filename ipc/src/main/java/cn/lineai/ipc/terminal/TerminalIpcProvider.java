@@ -65,12 +65,16 @@ public final class TerminalIpcProvider extends BaseIpcProvider {
     /**
      * 探测当前设备是否支持 proot（SELinux/seccomp 兼容性）。
      * 失败时捕获输出（proot 的 stderr / loader 报错）供诊断回显。
+     *
+     * @param probeCommand guest 内探测命令（Alpine 用 busybox echo，其他发行版直接 echo）
      */
-    public ProbeResult probeProotDetailed(String prootBin, File rootfsDir) {
+    public ProbeResult probeProotDetailed(String prootBin, File rootfsDir, String probeCommand) {
+        String command = probeCommand == null || probeCommand.length() == 0
+                ? "echo __lineai_proot_ok__" : probeCommand;
         StringBuilder output = new StringBuilder();
         try {
             TerminalShellResult result = executeShell(
-                    ProotCommandBuilder.build(prootBin, rootfsDir, "", "busybox echo __lineai_proot_ok__"),
+                    ProotCommandBuilder.build(prootBin, rootfsDir, "", command),
                     "", 15000L, new TerminalShellCallback() {
                         @Override
                         public void onOutput(String content) {
@@ -105,9 +109,10 @@ public final class TerminalIpcProvider extends BaseIpcProvider {
         }
     }
 
-    /** 兼容入口：仅判断成败。 */
+    /** 兼容入口：Alpine busybox 探测，仅判断成败。 */
     public boolean probeProot(String prootBin, File rootfsDir) {
-        return probeProotDetailed(prootBin, rootfsDir).supported;
+        return probeProotDetailed(prootBin, rootfsDir,
+                "busybox echo __lineai_proot_ok__").supported;
     }
 
     public TerminalShellResult executeShell(String command, String cwd, long timeoutMs,

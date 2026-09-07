@@ -724,6 +724,10 @@
     <string name="screen_mcp_linux_phase_extract">Extracting rootfs…</string>
     <string name="screen_mcp_linux_phase_configure">Configuring environment…</string>
     <string name="screen_mcp_linux_phase_tools">Installing tool packages (git etc.)…</string>
+    <string name="screen_mcp_linux_active_distro">Active distribution: %1$s (tap to switch)</string>
+    <string name="screen_mcp_linux_distro_picker_title">Choose distribution</string>
+    <string name="screen_mcp_linux_distro_size">rootfs download ~%1$s</string>
+    <string name="screen_mcp_linux_distro_unavailable">Coming in a later release</string>
     <string name="screen_security_section_proxy">Network proxy</string>
     <string name="screen_security_proxy_host">Proxy host</string>
     <string name="screen_security_proxy_port">Proxy port</string>

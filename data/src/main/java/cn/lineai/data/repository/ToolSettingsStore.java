@@ -24,6 +24,7 @@ public interface ToolSettingsStore {
     String KEY_IMAGE_UNDERSTANDING_MODEL_ID = "@lineai_image_understanding_model_id";
     String KEY_IMAGE_GENERATION_MODEL_ID = "@lineai_image_generation_model_id";
     String KEY_LINUX_ENV_ENABLED = "@lineai_linux_env_enabled";
+    String KEY_LINUX_ACTIVE_DISTRO = "@lineai_linux_active_distro";
 
     String PERMISSION_READONLY = "readonly";
     String PERMISSION_AUTO = "auto";
@@ -60,6 +61,15 @@ public interface ToolSettingsStore {
 
     /** 设置 Linux 环境子开关。 */
     default void setLinuxEnvEnabled(boolean enabled) {}
+
+    /**
+     * 当前激活的 Linux 发行版 id（{@code alpine} / {@code ubuntu}；未知值按 alpine 处理）。
+     * 默认 alpine，与历史行为一致。
+     */
+    default String getActiveDistroId() { return "alpine"; }
+
+    /** 设置当前激活的 Linux 发行版 id。 */
+    default void setActiveDistroId(String distroId) {}
 
     /** 全局 HTTP 代理 URL（http://host:port）；未配置返回空串。供 proot 内 apk 等透传。 */
     default String getProxyUrl() { return ""; }

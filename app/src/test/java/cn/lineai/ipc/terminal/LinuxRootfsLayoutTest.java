@@ -20,20 +20,72 @@ public final class LinuxRootfsLayoutTest {
     @Test
     public void metaRoundTrip() throws Exception {
         File filesDir = context().getFilesDir();
-        LinuxRootfsLayout.Meta meta = new LinuxRootfsLayout.Meta("3.20.3", "aarch64", 1234567890L, true);
-        LinuxRootfsLayout.writeMeta(filesDir, meta);
+        LinuxRootfsLayout.Meta meta = new LinuxRootfsLayout.Meta(
+                "alpine", "3.20.3", "aarch64", 1234567890L, true);
+        LinuxRootfsLayout.writeMeta(filesDir, "alpine", meta);
 
-        LinuxRootfsLayout.Meta read = LinuxRootfsLayout.readMeta(filesDir);
+        LinuxRootfsLayout.Meta read = LinuxRootfsLayout.readMeta(filesDir, "alpine");
         Assert.assertNotNull(read);
-        Assert.assertEquals("3.20.3", read.alpineVersion);
+        Assert.assertEquals("alpine", read.distro);
+        Assert.assertEquals("3.20.3", read.version);
         Assert.assertEquals("aarch64", read.arch);
         Assert.assertEquals(1234567890L, read.installedAt);
         Assert.assertTrue(read.prootSupported);
     }
 
     @Test
+    public void ubuntuMetaRoundTripPerDistro() throws Exception {
+        File filesDir = context().getFilesDir();
+        LinuxRootfsLayout.Meta meta = new LinuxRootfsLayout.Meta(
+                "ubuntu", "22.04.5", "arm64", 42L, true);
+        LinuxRootfsLayout.writeMeta(filesDir, "ubuntu", meta);
+
+        LinuxRootfsLayout.Meta read = LinuxRootfsLayout.readMeta(filesDir, "ubuntu");
+        Assert.assertNotNull(read);
+        Assert.assertEquals("ubuntu", read.distro);
+        Assert.assertEquals("22.04.5", read.version);
+        Assert.assertTrue(LinuxRootfsLayout.isInstalled(filesDir, "ubuntu")
+                == new File(LinuxRootfsLayout.rootfsDir(filesDir, "ubuntu"), "bin").isDirectory());
+
+        // 各发行版 meta 相互独立
+        Assert.assertNull(LinuxRootfsLayout.readMeta(filesDir, "alpine"));
+        LinuxRootfsLayout.deleteDistro(filesDir, "ubuntu");
+        Assert.assertNull(LinuxRootfsLayout.readMeta(filesDir, "ubuntu"));
+    }
+
+    @Test
+    public void legacyMetaStillReadableAsAlpine() throws Exception {
+        File filesDir = context().getFilesDir();
+        // 旧版单发行版格式：rootfs.meta.json，字段 alpineVersion，无 distro/version
+        File legacy = new File(filesDir, "proot/rootfs.meta.json");
+        //noinspection ResultOfMethodCallIgnored
+        legacy.getParentFile().mkdirs();
+        java.nio.file.Files.write(legacy.toPath(),
+                ("{\"alpineVersion\":\"3.20.3\",\"arch\":\"aarch64\",\"installedAt\":7,"
+                        + "\"prootSupported\":true,\"prootUnsupportedReason\":\"\"}").getBytes("UTF-8"));
+
+        LinuxRootfsLayout.Meta read = LinuxRootfsLayout.readMeta(filesDir, "alpine");
+        Assert.assertNotNull(read);
+        Assert.assertEquals("alpine", read.distro);
+        Assert.assertEquals("3.20.3", read.version);
+        Assert.assertEquals(7L, read.installedAt);
+    }
+
+    @Test
+    public void alpineWriteAlsoEmitsLegacyField() throws Exception {
+        File filesDir = context().getFilesDir();
+        LinuxRootfsLayout.writeMeta(filesDir, "alpine", new LinuxRootfsLayout.Meta(
+                "alpine", "3.20.3", "aarch64", 1L, true));
+        File file = LinuxRootfsLayout.metaFile(filesDir, "alpine");
+        String json = new String(java.nio.file.Files.readAllBytes(file.toPath()), "UTF-8");
+        // 旧版本 App 兼容：alpine 字段 meta 同时带 alpineVersion
+        Assert.assertTrue(json, json.contains("\"alpineVersion\":\"3.20.3\""));
+    }
+
+    @Test
     public void missingMetaReturnsNull() {
-        Assert.assertNull(LinuxRootfsLayout.readMeta(context().getFilesDir()));
+        Assert.assertNull(LinuxRootfsLayout.readMeta(context().getFilesDir(), "alpine"));
+        Assert.assertNull(LinuxRootfsLayout.readMeta(context().getFilesDir(), "ubuntu"));
     }
 
     @Test
@@ -44,21 +96,47 @@ public final class LinuxRootfsLayoutTest {
         //noinspection ResultOfMethodCallIgnored
         bin.mkdirs();
         Assert.assertTrue(LinuxRootfsLayout.isInstalled(filesDir));
+        Assert.assertTrue(LinuxRootfsLayout.isInstalled(filesDir, "alpine"));
+        Assert.assertFalse(LinuxRootfsLayout.isInstalled(filesDir, "ubuntu"));
     }
 
     @Test
-    public void deleteAllRemovesRootfsAndMeta() throws Exception {
+    public void deleteDistroRemovesOnlyThatDistro() throws Exception {
         File filesDir = context().getFilesDir();
-        File bin = new File(LinuxRootfsLayout.rootfsDir(filesDir), "bin");
+        File alpineBin = new File(LinuxRootfsLayout.rootfsDir(filesDir, "alpine"), "bin");
+        File ubuntuBin = new File(LinuxRootfsLayout.rootfsDir(filesDir, "ubuntu"), "bin");
         //noinspection ResultOfMethodCallIgnored
-        bin.mkdirs();
-        LinuxRootfsLayout.writeMeta(filesDir,
-                new LinuxRootfsLayout.Meta("3.20.3", "aarch64", 1L, true));
+        alpineBin.mkdirs();
+        //noinspection ResultOfMethodCallIgnored
+        ubuntuBin.mkdirs();
+        LinuxRootfsLayout.writeMeta(filesDir, "ubuntu", new LinuxRootfsLayout.Meta(
+                "ubuntu", "22.04.5", "arm64", 1L, true));
+
+        LinuxRootfsLayout.deleteDistro(filesDir, "ubuntu");
+
+        Assert.assertTrue(LinuxRootfsLayout.isInstalled(filesDir, "alpine"));
+        Assert.assertFalse(LinuxRootfsLayout.isInstalled(filesDir, "ubuntu"));
+        Assert.assertNull(LinuxRootfsLayout.readMeta(filesDir, "ubuntu"));
+    }
+
+    @Test
+    public void deleteAllKeepsSharedRuntimeDirs() throws Exception {
+        File filesDir = context().getFilesDir();
+        File lib = new File(filesDir, "proot/lib");
+        File alpineBin = new File(LinuxRootfsLayout.rootfsDir(filesDir, "alpine"), "bin");
+        File ubuntuBin = new File(LinuxRootfsLayout.rootfsDir(filesDir, "ubuntu"), "bin");
+        //noinspection ResultOfMethodCallIgnored
+        lib.mkdirs();
+        //noinspection ResultOfMethodCallIgnored
+        alpineBin.mkdirs();
+        //noinspection ResultOfMethodCallIgnored
+        ubuntuBin.mkdirs();
 
         LinuxRootfsLayout.deleteAll(filesDir);
 
-        Assert.assertFalse(LinuxRootfsLayout.isInstalled(filesDir));
-        Assert.assertNull(LinuxRootfsLayout.readMeta(filesDir));
+        Assert.assertTrue(lib.isDirectory());
+        Assert.assertFalse(alpineBin.isDirectory());
+        Assert.assertFalse(ubuntuBin.isDirectory());
     }
 
     @Test

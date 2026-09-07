@@ -706,7 +706,8 @@ public final class MainCoordinator implements MainUiController {
                     state.getImageUnderstandingModelId(),
                     state.getImageGenerationModelId(),
                     linuxEnvironmentController.isEnabled(),
-                    envState);
+                    envState,
+                    linuxEnvironmentController.activeDistro().id);
         }
         return state;
     }
@@ -749,6 +750,15 @@ public final class MainCoordinator implements MainUiController {
             refreshVisibleScreen("mcp");
             render();
         }
+    }
+
+    @Override
+    public void onLinuxDistroSelected(String distroId) {
+        if (linuxEnvironmentController != null) {
+            linuxEnvironmentController.setActiveDistro(distroId);
+        }
+        refreshVisibleScreen("mcp");
+        render();
     }
 
     @Override

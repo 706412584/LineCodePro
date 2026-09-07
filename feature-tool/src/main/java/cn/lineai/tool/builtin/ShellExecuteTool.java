@@ -72,7 +72,8 @@ public final class ShellExecuteTool extends BaseTool {
             return "shell_execute runs in the current workspace directory by default; set cwd explicitly to switch temporarily.";
         }
         return "shell_execute runs via the terminal provider IPC; it runs in the current workspace directory by default; set cwd explicitly to switch temporarily. "
-                + "When the Linux environment toggle is enabled, commands run in an Alpine proot environment with apk available; install packages with `apk add <pkg>` (not apt).";
+                + "When the Linux environment toggle is enabled, commands run in a proot environment of the currently active distribution (Alpine or Ubuntu). "
+                + "Install packages with the distribution's package manager: Alpine uses `apk add <pkg>`; Ubuntu uses `apt-get update && apt-get install -y <pkg>` (not apk).";
     }
 
     @Override
@@ -159,14 +160,16 @@ public final class ShellExecuteTool extends BaseTool {
 
     /**
      * Linux（proot）路径。返回 null 表示 proot 不可用（未安装/不支持/执行失败），
-     * 调用方回退系统 shell。
+     * 调用方回退系统 shell。rootfs 按 settings 中激活的发行版解析。
      */
     private ToolResult executeViaLinux(TerminalIpcProvider provider, String command, String cwd,
                                        long timeoutMs, ToolContext context) {
         android.content.Context appContext = context.getAndroidContext();
         java.io.File filesDir = appContext.getFilesDir();
-        LinuxRootfsLayout.Meta meta = LinuxRootfsLayout.readMeta(filesDir);
-        if (meta == null || !LinuxRootfsLayout.isInstalled(filesDir)) {
+        String distroId = cn.lineai.ipc.terminal.LinuxDistro.byId(
+                resolveSettings(context) == null ? null : resolveSettings(context).getActiveDistroId()).id;
+        LinuxRootfsLayout.Meta meta = LinuxRootfsLayout.readMeta(filesDir, distroId);
+        if (meta == null || !LinuxRootfsLayout.isInstalled(filesDir, distroId)) {
             return error(context.getString(R.string.tool_shell_linux_not_installed));
         }
         if (!meta.prootSupported) {
@@ -179,7 +182,7 @@ public final class ShellExecuteTool extends BaseTool {
         }
         try {
             // 幂等：SONAME 链接 + PROOT_TMP_DIR 目录缺失时自愈
-            ProotCommandBuilder.ensureRuntimeLayout(prootBin, LinuxRootfsLayout.rootfsDir(filesDir));
+            ProotCommandBuilder.ensureRuntimeLayout(prootBin, LinuxRootfsLayout.rootfsDir(filesDir, distroId));
         } catch (java.io.IOException layoutError) {
             return null;
         }
@@ -189,7 +192,7 @@ public final class ShellExecuteTool extends BaseTool {
         StringBuilder streamedOutput = new StringBuilder();
         try {
             TerminalShellResult result = provider.executeShellInLinux(
-                    command, cwd, timeoutMs, prootBin, LinuxRootfsLayout.rootfsDir(filesDir),
+                    command, cwd, timeoutMs, prootBin, LinuxRootfsLayout.rootfsDir(filesDir, distroId),
                     resolveSettings(context) == null ? "" : resolveSettings(context).getProxyUrl(),
                     new TerminalShellCallback() {
                         @Override

@@ -12,6 +12,7 @@ public final class McpSettingsState {
     private final String imageGenerationModelId;
     private final boolean linuxEnvEnabled;
     private final String linuxEnvState;
+    private final String linuxActiveDistroId;
 
     public McpSettingsState(String executionMode, List<McpToolConfig> configs) {
         this(executionMode, configs, WebSearchConfig.defaultConfig());
@@ -50,6 +51,20 @@ public final class McpSettingsState {
             boolean linuxEnvEnabled,
             String linuxEnvState
     ) {
+        this(executionMode, configs, webSearchConfig, imageUnderstandingModelId, imageGenerationModelId,
+                linuxEnvEnabled, linuxEnvState, "");
+    }
+
+    public McpSettingsState(
+            String executionMode,
+            List<McpToolConfig> configs,
+            WebSearchConfig webSearchConfig,
+            String imageUnderstandingModelId,
+            String imageGenerationModelId,
+            boolean linuxEnvEnabled,
+            String linuxEnvState,
+            String linuxActiveDistroId
+    ) {
         this.executionMode = executionMode == null ? "local" : executionMode;
         this.configs = configs == null ? Collections.emptyList() : Collections.unmodifiableList(new ArrayList<>(configs));
         this.webSearchConfig = webSearchConfig == null ? WebSearchConfig.defaultConfig() : webSearchConfig;
@@ -57,6 +72,8 @@ public final class McpSettingsState {
         this.imageGenerationModelId = imageGenerationModelId == null ? "" : imageGenerationModelId.trim();
         this.linuxEnvEnabled = linuxEnvEnabled;
         this.linuxEnvState = linuxEnvState == null ? "" : linuxEnvState;
+        this.linuxActiveDistroId = linuxActiveDistroId == null || linuxActiveDistroId.length() == 0
+                ? "alpine" : linuxActiveDistroId;
     }
 
     public String getExecutionMode() {
@@ -86,5 +103,10 @@ public final class McpSettingsState {
     /** Linux 环境状态描述（missing / installing / installed / unsupported；UI 层翻译）。 */
     public String getLinuxEnvState() {
         return linuxEnvState;
+    }
+
+    /** 当前激活的 Linux 发行版 id（空视为 alpine）。 */
+    public String getLinuxActiveDistroId() {
+        return linuxActiveDistroId;
     }
 }

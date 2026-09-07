@@ -9,141 +9,145 @@ import java.nio.charset.StandardCharsets;
 import org.json.JSONObject;
 
 /**
- * proot + Alpine rootfs 的磁盘布局与元数据。
+ * proot + 多发行版 rootfs 的磁盘布局与元数据。
  *
  * <p>目录结构（全部位于宿主 app 的 filesDir，主进程与 :terminal 进程同 uid 可互访）：
  * <ul>
- *   <li>{@code files/proot/alpine/} — Alpine mini rootfs 解压根</li>
- *   <li>{@code files/proot/alpine.tmp/} — 解压临时目录，成功后原子 rename</li>
- *   <li>{@code files/proot/rootfs.meta.json} — 安装元数据</li>
- * </ul></p>
+ *   <li>{@code files/proot/<distroId>/} — 各发行版 rootfs 解压根（alpine / ubuntu / …）</li>
+ *   <li>{@code files/proot/<distroId>.tmp.<millis>/} — 解压临时目录，成功后原子 rename</li>
+ *   <li>{@code files/proot/meta-<distroId>.json} — 各发行版安装元数据</li>
+ *   <li>{@code files/proot/lib、/tmp} — 运行时共享目录（SONAME 链接 / PROOT_TMP_DIR）</li>
+ * </ul>
+ * Alpine 的 distroId 即 "alpine"，与历史目录名一致，已装用户零迁移。</p>
  */
 public final class LinuxRootfsLayout {
 
     public static final String DIR_NAME = "proot";
+    /** 默认（历史）rootfs 目录名 = Alpine 的 distroId。 */
     public static final String ROOTFS_NAME = "alpine";
+    /** 历史元数据文件名（旧版单发行版布局；读 alpine meta 时回退）。 */
     public static final String META_NAME = "rootfs.meta.json";
-
-    public static final String ALPINE_VERSION = "3.20";
-    public static final String ALPINE_PATCH = "3.20.3";
 
     private LinuxRootfsLayout() {
     }
 
-    /** rootfs 解压根目录。 */
+    /** rootfs 解压根目录（默认 Alpine，兼容旧调用）。 */
     public static File rootfsDir(File filesDir) {
-        return new File(baseDir(filesDir), ROOTFS_NAME);
+        return rootfsDir(filesDir, LinuxDistro.ALPINE.id);
+    }
+
+    /** 指定发行版的 rootfs 解压根目录。 */
+    public static File rootfsDir(File filesDir, String distroId) {
+        return new File(baseDir(filesDir), distroName(distroId));
     }
 
     /** 解压临时目录（固定名；遗留兼容用，勿再用于新安装）。 */
     public static File tmpDir(File filesDir) {
-        return new File(baseDir(filesDir), ROOTFS_NAME + ".tmp");
+        return tmpDir(filesDir, LinuxDistro.ALPINE.id);
+    }
+
+    /** 指定发行版的解压临时目录（固定名遗留形态）。 */
+    public static File tmpDir(File filesDir, String distroId) {
+        return new File(baseDir(filesDir), distroName(distroId) + ".tmp");
     }
 
     /**
-     * 新安装用的唯一临时目录（alpine.tmp.&lt;millis&gt;）。
-     * 避开失败安装残留的 alpine.tmp（文件被占用时残留可能删不干净，
+     * 新安装用的唯一临时目录（&lt;distroId&gt;.tmp.&lt;millis&gt;）。
+     * 避开失败安装残留的固定名 tmp（文件被占用时残留可能删不干净，
      * 其中的旧文件会让 symlink 报 EEXIST、写入报 EROFS）。
      */
-    public static File freshTmpDir(File filesDir) {
-        return new File(baseDir(filesDir), ROOTFS_NAME + ".tmp." + System.currentTimeMillis());
+    public static File freshTmpDir(File filesDir, String distroId) {
+        return new File(baseDir(filesDir), distroName(distroId) + ".tmp." + System.currentTimeMillis());
     }
 
-    /** 清理所有临时目录（固定名 + 任意 .tmp.* 变体）。 */
-    public static void cleanupTmpDirs(File filesDir) {
+    /** 清理指定发行版的所有临时目录（固定名 + 任意 .tmp.* 变体）。 */
+    public static void cleanupTmpDirs(File filesDir, String distroId) {
         File base = baseDir(filesDir);
         File[] children = base.listFiles();
         if (children == null) {
             return;
         }
+        String prefix = distroName(distroId) + ".tmp";
         for (File child : children) {
-            String name = child.getName();
-            if (name.startsWith(ROOTFS_NAME + ".tmp")) {
+            if (child.getName().startsWith(prefix)) {
                 deleteRecursive(child);
             }
         }
     }
 
-    /** 元数据文件。 */
-    public static File metaFile(File filesDir) {
-        return new File(baseDir(filesDir), META_NAME);
+    /** 指定发行版的元数据文件。 */
+    public static File metaFile(File filesDir, String distroId) {
+        return new File(baseDir(filesDir), "meta-" + distroName(distroId) + ".json");
     }
 
     private static File baseDir(File filesDir) {
         return new File(filesDir, DIR_NAME);
     }
 
-    /** rootfs 是否已解压（alpine/bin 目录存在视为有效）。 */
+    private static String distroName(String distroId) {
+        return distroId == null || distroId.length() == 0 ? LinuxDistro.ALPINE.id : distroId;
+    }
+
+    /** rootfs 是否已解压（&lt;distro&gt;/bin 目录存在视为有效；默认 Alpine）。 */
     public static boolean isInstalled(File filesDir) {
-        return new File(rootfsDir(filesDir), "bin").isDirectory();
+        return isInstalled(filesDir, LinuxDistro.ALPINE.id);
     }
 
-    /**
-     * 设备 ABI → Alpine arch。返回空串表示无可用 rootfs（不支持的 ABI）。
-     * 映射：arm64-v8a→aarch64、armeabi-v7a→armv7、x86_64→x86_64。
-     */
+    /** 指定发行版的 rootfs 是否已解压。 */
+    public static boolean isInstalled(File filesDir, String distroId) {
+        return new File(rootfsDir(filesDir, distroId), "bin").isDirectory();
+    }
+
+    /** 设备首选 ABI → Alpine guest arch（遗留兼容；新代码用 {@link LinuxDistro#guestArch()}）。 */
     public static String alpineArch() {
-        String[] abis = Build.SUPPORTED_ABIS == null ? new String[0] : Build.SUPPORTED_ABIS;
-        for (String abi : abis) {
-            if ("arm64-v8a".equals(abi)) return "aarch64";
-            if ("x86_64".equals(abi)) return "x86_64";
-            if ("armeabi-v7a".equals(abi)) return "armv7";
-        }
-        return "";
+        return LinuxDistro.ALPINE.guestArch();
     }
 
-    /** minirootfs 下载 URL（HTTPS，dl-cdn.alpinelinux.org）。 */
+    /** 以下 URL 方法为遗留兼容入口，均委托 {@link LinuxDistro}。 */
     public static String minirootfsUrl(String arch) {
-        return "https://dl-cdn.alpinelinux.org/alpine/v" + ALPINE_VERSION
-                + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
+        String[] all = LinuxDistro.ALPINE.downloadUrls(arch);
+        return all[all.length - 1];
     }
 
-    /**
-     * 国内镜像下载 URL 列表（按优先级，内容与官方 CDN 字节一致）。
-     * 下载方逐个尝试直至成功；全部失败再回退 {@link #minirootfsUrl(String)}。
-     */
     public static String[] minirootfsMirrorUrls(String arch) {
-        String suffix = "alpine/v" + ALPINE_VERSION
-                + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
-        return new String[] {
-                "https://mirrors.tuna.tsinghua.edu.cn/" + suffix,
-                "https://repo.huaweicloud.com/" + suffix,
-                "https://mirrors.ustc.edu.cn/" + suffix,
-                "https://mirrors.cloud.tencent.com/" + suffix,
-        };
+        String[] all = LinuxDistro.ALPINE.downloadUrls(arch);
+        String[] mirrors = new String[all.length - 1];
+        System.arraycopy(all, 0, mirrors, 0, mirrors.length);
+        return mirrors;
     }
 
-    /** 国内镜像（清华 TUNA）下载 URL；内容与官方 CDN 字节一致。 */
     public static String minirootfsMirrorUrl(String arch) {
         return minirootfsMirrorUrls(arch)[0];
     }
 
-    /** 同目录 sha256 校验文件 URL。 */
     public static String minirootfsSha256Url(String arch) {
-        return minirootfsUrl(arch) + ".sha256";
+        return LinuxDistro.ALPINE.sha256Url(arch);
     }
 
-    /** APK assets 内置的 rootfs 文件名（assets/rootfs/ 下）。 */
     public static String bundledAssetName(String arch) {
-        return "rootfs/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
+        return LinuxDistro.ALPINE.bundledAssetName(arch);
     }
 
     /** 安装元数据。 */
     public static final class Meta {
-        public final String alpineVersion;
+        /** 发行版 id（旧格式缺省视为 alpine）。 */
+        public final String distro;
+        /** 发行版版本（旧格式回退 alpineVersion 字段）。 */
+        public final String version;
         public final String arch;
         public final long installedAt;
         public final boolean prootSupported;
         /** proot 探测失败原因（supported=true 时为空）。 */
         public final String prootUnsupportedReason;
 
-        public Meta(String alpineVersion, String arch, long installedAt, boolean prootSupported) {
-            this(alpineVersion, arch, installedAt, prootSupported, "");
+        public Meta(String distro, String version, String arch, long installedAt, boolean prootSupported) {
+            this(distro, version, arch, installedAt, prootSupported, "");
         }
 
-        public Meta(String alpineVersion, String arch, long installedAt, boolean prootSupported,
+        public Meta(String distro, String version, String arch, long installedAt, boolean prootSupported,
                     String prootUnsupportedReason) {
-            this.alpineVersion = alpineVersion == null ? "" : alpineVersion;
+            this.distro = distro == null || distro.length() == 0 ? LinuxDistro.ALPINE.id : distro;
+            this.version = version == null ? "" : version;
             this.arch = arch == null ? "" : arch;
             this.installedAt = installedAt;
             this.prootSupported = prootSupported;
@@ -151,9 +155,16 @@ public final class LinuxRootfsLayout {
         }
     }
 
-    /** 读元数据；不存在或损坏返回 null。 */
-    public static Meta readMeta(File filesDir) {
-        File file = metaFile(filesDir);
+    /**
+     * 读指定发行版的元数据；不存在或损坏返回 null。
+     * Alpine 回退历史单文件 {@code rootfs.meta.json}（旧版布局）。
+     */
+    public static Meta readMeta(File filesDir, String distroId) {
+        String id = distroName(distroId);
+        File file = metaFile(filesDir, id);
+        if (!file.isFile() && LinuxDistro.ALPINE.id.equals(id)) {
+            file = new File(baseDir(filesDir), META_NAME);
+        }
         if (!file.isFile()) {
             return null;
         }
@@ -166,8 +177,13 @@ public final class LinuxRootfsLayout {
                 read += n;
             }
             JSONObject json = new JSONObject(new String(buffer, 0, read, StandardCharsets.UTF_8));
+            String version = json.optString("version", "");
+            if (version.length() == 0) {
+                version = json.optString("alpineVersion", "");
+            }
             return new Meta(
-                    json.optString("alpineVersion", ""),
+                    json.optString("distro", LinuxDistro.ALPINE.id),
+                    version,
                     json.optString("arch", ""),
                     json.optLong("installedAt", 0L),
                     json.optBoolean("prootSupported", false),
@@ -177,11 +193,16 @@ public final class LinuxRootfsLayout {
         }
     }
 
-    /** 写元数据（原子写：tmp + rename）。 */
-    public static void writeMeta(File filesDir, Meta meta) throws IOException {
+    /** 写指定发行版的元数据（原子写：tmp + rename）。 */
+    public static void writeMeta(File filesDir, String distroId, Meta meta) throws IOException {
         JSONObject json = new JSONObject();
         try {
-            json.put("alpineVersion", meta.alpineVersion);
+            json.put("distro", distroName(distroId));
+            json.put("version", meta.version);
+            // 旧版本 App 读此文件需要 alpineVersion 字段，双写兼容
+            if (LinuxDistro.ALPINE.id.equals(distroName(distroId))) {
+                json.put("alpineVersion", meta.version);
+            }
             json.put("arch", meta.arch);
             json.put("installedAt", meta.installedAt);
             json.put("prootSupported", meta.prootSupported);
@@ -189,7 +210,7 @@ public final class LinuxRootfsLayout {
         } catch (Exception e) {
             throw new IOException(e);
         }
-        File target = metaFile(filesDir);
+        File target = metaFile(filesDir, distroId);
         File parent = target.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
             throw new IOException("cannot create meta dir: " + parent);
@@ -205,12 +226,32 @@ public final class LinuxRootfsLayout {
         }
     }
 
-    /** 删除 rootfs 与元数据（清理入口）。 */
-    public static void deleteAll(File filesDir) {
-        deleteRecursive(rootfsDir(filesDir));
-        deleteRecursive(tmpDir(filesDir));
+    /** 删除指定发行版的 rootfs、临时目录与元数据。 */
+    public static void deleteDistro(File filesDir, String distroId) {
+        deleteRecursive(rootfsDir(filesDir, distroId));
+        cleanupTmpDirs(filesDir, distroId);
         //noinspection ResultOfMethodCallIgnored
-        metaFile(filesDir).delete();
+        metaFile(filesDir, distroId).delete();
+        if (LinuxDistro.ALPINE.id.equals(distroName(distroId))) {
+            // 旧版单文件元数据一并清理
+            //noinspection ResultOfMethodCallIgnored
+            new File(baseDir(filesDir), META_NAME).delete();
+        }
+    }
+
+    /** 删除全部发行版数据（彻底清理入口；保留运行时共享 lib/tmp）。 */
+    public static void deleteAll(File filesDir) {
+        File base = baseDir(filesDir);
+        File[] children = base.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                String name = child.getName();
+                boolean isSharedRuntime = "lib".equals(name) || "tmp".equals(name);
+                if (!isSharedRuntime) {
+                    deleteRecursive(child);
+                }
+            }
+        }
     }
 
     /** 递归删除（public：安装流程清残留目标也用）。 */
