@@ -240,7 +240,7 @@ public final class LinuxEnvironmentController {
     }
 
     /**
-     * rootfs 获取：APK assets 内置（离线）→ 清华镜像（带进度）→ 官方 CDN。
+     * rootfs 获取：APK assets 内置（离线）→ 国内镜像逐个尝试（清华/华为云/中科大/腾讯云）→ 官方 CDN。
      * sha256 在调用方统一校验。
      */
     private byte[] obtainRootfs(String arch) throws Exception {
@@ -251,16 +251,17 @@ public final class LinuxEnvironmentController {
         } catch (IOException noAsset) {
             // 老 APK / 未来瘦身场景，走下载
         }
-        // 2) 清华镜像
-        reportProgress(PHASE_DOWNLOAD, "0%");
-        try {
-            return SimpleHttpClient.downloadWithProgress(
-                    LinuxRootfsLayout.minirootfsMirrorUrl(arch),
-                    CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS,
-                    (read, total) -> reportProgress(PHASE_DOWNLOAD,
-                            total > 0 ? (read * 100 / total) + "%" : (read / 1024) + " KB")).bytes;
-        } catch (Exception mirrorFailure) {
-            Log.w(TAG, "mirror download failed, falling back to official CDN: " + mirrorFailure.getMessage());
+        // 2) 国内镜像逐个回退
+        for (String mirrorUrl : LinuxRootfsLayout.minirootfsMirrorUrls(arch)) {
+            reportProgress(PHASE_DOWNLOAD, "0%");
+            try {
+                return SimpleHttpClient.downloadWithProgress(
+                        mirrorUrl, CONNECT_TIMEOUT_MS, READ_TIMEOUT_MS,
+                        (read, total) -> reportProgress(PHASE_DOWNLOAD,
+                                total > 0 ? (read * 100 / total) + "%" : (read / 1024) + " KB")).bytes;
+            } catch (Exception mirrorFailure) {
+                Log.w(TAG, "mirror download failed (" + mirrorUrl + "): " + mirrorFailure.getMessage());
+            }
         }
         // 3) 官方 CDN
         reportProgress(PHASE_DOWNLOAD, "0%");

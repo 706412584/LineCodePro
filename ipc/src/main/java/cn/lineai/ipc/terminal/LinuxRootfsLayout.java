@@ -98,10 +98,24 @@ public final class LinuxRootfsLayout {
                 + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
     }
 
+    /**
+     * 国内镜像下载 URL 列表（按优先级，内容与官方 CDN 字节一致）。
+     * 下载方逐个尝试直至成功；全部失败再回退 {@link #minirootfsUrl(String)}。
+     */
+    public static String[] minirootfsMirrorUrls(String arch) {
+        String suffix = "alpine/v" + ALPINE_VERSION
+                + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
+        return new String[] {
+                "https://mirrors.tuna.tsinghua.edu.cn/" + suffix,
+                "https://repo.huaweicloud.com/" + suffix,
+                "https://mirrors.ustc.edu.cn/" + suffix,
+                "https://mirrors.cloud.tencent.com/" + suffix,
+        };
+    }
+
     /** 国内镜像（清华 TUNA）下载 URL；内容与官方 CDN 字节一致。 */
     public static String minirootfsMirrorUrl(String arch) {
-        return "https://mirrors.tuna.tsinghua.edu.cn/alpine/v" + ALPINE_VERSION
-                + "/releases/" + arch + "/alpine-minirootfs-" + ALPINE_PATCH + "-" + arch + ".tar.gz";
+        return minirootfsMirrorUrls(arch)[0];
     }
 
     /** 同目录 sha256 校验文件 URL。 */

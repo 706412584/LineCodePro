@@ -11,7 +11,8 @@ import java.io.File;
  * <pre>
  * LD_LIBRARY_PATH=<symDir>:<libDir> PROOT_LOADER=<libDir>/libproot_loader.so \
  *   PROOT_TMP_DIR=<tmpDir> <libDir>/libproot.so \
- *   -R <rootfs> -b /storage -b /sdcard -w <cwd> /bin/sh -c 'export ...; <command>'
+ *   -R <rootfs> -0 --link2symlink -b /storage -b /sdcard -b /system \
+ *   -w <cwd> /bin/sh -c 'export ...; <command>'
  * </pre>
  *
  * <p>关键点：
@@ -23,6 +24,11 @@ import java.io.File;
  *   <li>{@code PROOT_TMP_DIR} 指向 app 可写目录（默认 /tmp 不可写，
  *       proot 报 "can't create glue rootfs"）。</li>
  *   <li>变量赋值前缀在 POSIX sh 中合法，无需改动 ProcessBuilder/AIDL 环境传递。</li>
+ *   <li>{@code -0} 伪 root：apk 等按 euid==0 分支的工具在非 root 环境下行为正确
+ *       （借鉴 termux proot-distro 的标准用法）。</li>
+ *   <li>{@code --link2symlink}：Android 数据目录文件系统不支持硬链接，apk add 解包
+ *       大量硬链接操作会直接失败；该扩展使 proot 把硬链接降级为符号链接。</li>
+ *   <li>{@code -b /system}：容器内可访问宿主系统库（部分动态链接的宿主二进制需要）。</li>
  *   <li>{@code -b /storage} 使 host/guest 路径一致，工作区（/storage/emulated/0/...）
  *       的 cwd 语义对 guest 直接生效。</li>
  * </ul></p>
@@ -67,7 +73,8 @@ public final class ProotCommandBuilder {
                 + " PROOT_TMP_DIR=" + shellQuote(tmpDir)
                 + " " + shellQuote(prootBin)
                 + " -R " + shellQuote(rootfs)
-                + " -b /storage -b /sdcard"
+                + " -0 --link2symlink"
+                + " -b /storage -b /sdcard -b /system"
                 + " -w " + shellQuote(workDir)
                 + " /bin/sh -c " + shellQuote(guestScript(command, proxyUrl));
     }

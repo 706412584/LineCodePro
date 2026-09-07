@@ -20,7 +20,8 @@ public final class ProotCommandBuilderTest {
         Assert.assertTrue(command, command.contains("PROOT_TMP_DIR='")
                 && command.contains("files/proot/tmp'"));
         Assert.assertTrue(command, command.contains("-R '") && command.contains("files/proot/alpine'"));
-        Assert.assertTrue(command, command.contains("-b /storage -b /sdcard"));
+        Assert.assertTrue(command, command.contains("-0 --link2symlink"));
+        Assert.assertTrue(command, command.contains("-b /storage -b /sdcard -b /system"));
         Assert.assertTrue(command, command.contains("-w '/storage/emulated/0/AGG'"));
         Assert.assertTrue(command, command.contains("export HOME=/root TERM=xterm-256color PATH="));
         Assert.assertTrue(command, command.endsWith("ls'"));

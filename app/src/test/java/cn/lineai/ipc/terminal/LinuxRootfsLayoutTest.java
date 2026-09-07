@@ -79,6 +79,21 @@ public final class LinuxRootfsLayoutTest {
     }
 
     @Test
+    public void mirrorListCoversMajorDomesticMirrorsWithSameArtifactName() {
+        String official = LinuxRootfsLayout.minirootfsUrl("aarch64");
+        String expectedArtifact = official.substring(official.lastIndexOf('/') + 1);
+        String[] mirrors = LinuxRootfsLayout.minirootfsMirrorUrls("aarch64");
+        Assert.assertEquals(4, mirrors.length);
+        Assert.assertTrue(mirrors[0].startsWith("https://mirrors.tuna.tsinghua.edu.cn/"));
+        Assert.assertTrue(mirrors[1].startsWith("https://repo.huaweicloud.com/"));
+        Assert.assertTrue(mirrors[2].startsWith("https://mirrors.ustc.edu.cn/"));
+        Assert.assertTrue(mirrors[3].startsWith("https://mirrors.cloud.tencent.com/"));
+        for (String mirror : mirrors) {
+            Assert.assertTrue(mirror, mirror.endsWith(expectedArtifact));
+        }
+    }
+
+    @Test
     public void bundledAssetNameMatchesArch() {
         Assert.assertEquals("rootfs/alpine-minirootfs-3.20.3-aarch64.tar.gz",
                 LinuxRootfsLayout.bundledAssetName("aarch64"));
