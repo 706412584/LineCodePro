@@ -180,4 +180,24 @@ public final class ChatUiState {
     public String getChatMode() { return chatMode; }
     public String getConversationId() { return conversationId; }
     public List<ChatMessage> getMessages() { return messages; }
+
+    // ===== 编辑框工具栏状态（cc-haha 复刻；默认空，经 withToolbarState 注入） =====
+    private String permissionMode = "";
+    private String gitBranch = "";
+    private String reasoningEffort = "";
+
+    public ChatUiState withToolbarState(String permissionMode, String gitBranch, String reasoningEffort) {
+        ChatUiState next = new ChatUiState(projectLabel, projectPath, modelLabel, contextLabel, contextPercent, streaming,
+                hasConfiguredModel, thinkingScrollEnabled, thinkingAutoExpandEnabled, processAutoExpandEnabled,
+                codeWrapEnabled, browserMode, enterKeyBehavior, chatMode, conversationId, messages,
+                selectedModelId, availableModels, toolApproval);
+        next.permissionMode = permissionMode == null ? "" : permissionMode;
+        next.gitBranch = gitBranch == null ? "" : gitBranch;
+        next.reasoningEffort = reasoningEffort == null ? "" : reasoningEffort;
+        return next;
+    }
+
+    public String getPermissionMode() { return permissionMode == null ? "" : permissionMode; }
+    public String getGitBranch() { return gitBranch == null ? "" : gitBranch; }
+    public String getReasoningEffort() { return reasoningEffort == null ? "" : reasoningEffort; }
 }

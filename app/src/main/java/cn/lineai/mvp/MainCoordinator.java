@@ -97,6 +97,7 @@ public final class MainCoordinator implements MainUiController {
     ContextCompactionController contextCompactionController;
     IpcProviderController ipcProviderController;
     LinuxEnvironmentController linuxEnvironmentController;
+    GitBranchController gitBranchController;
     final GenerationController generationController = new GenerationController();
     GenerationLifecycleController generationLifecycleController;
     GenerationFlowController generationFlowController;
@@ -1025,6 +1026,7 @@ public final class MainCoordinator implements MainUiController {
         projectState.apply(project, projectRepository);
         fileTreeInteractionController.resetToProjectRoot();
         sshFileTreeController.invalidateFileTree();
+        probeGitBranchForWorkspace();
     }
 
     void requestSshFileTreeLoad(boolean force) {
@@ -1131,8 +1133,65 @@ public final class MainCoordinator implements MainUiController {
         if (toolReviewController != null) {
             uiState = uiState.withDisplayMessages(toolReviewController.applyLocalReviews(messages));
         }
+        // 编辑框工具栏状态：权限模式 / git 分支（终端提供者模式探测） / 推理 effort
+        uiState = uiState.withToolbarState(
+                toolSettingsRepository.getPermissionMode(),
+                gitBranch,
+                aiBehaviorSettingsRepository.get().getReasoningEffort());
         viewProxy.render(uiState.withToolApproval(
                 generationFlowController == null ? null : generationFlowController.pendingToolApproval()));
+    }
+
+    /** 最近探测到的 git 分支（GitBranchController 写入；空 = 不显示芯片）。 */
+    private volatile String gitBranch = "";
+
+    void updateGitBranch(String branch) {
+        gitBranch = branch == null ? "" : branch;
+        render();
+    }
+
+    /** 终端提供者模式下探测当前工作区的 git 分支；其他模式清空芯片。 */
+    void probeGitBranchForWorkspace() {
+        if (gitBranchController != null) {
+            if (isTerminalProviderExecutionMode()) {
+                gitBranchController.probe(projectState.path());
+            } else {
+                updateGitBranch("");
+            }
+        }
+    }
+
+    @Override
+    public void onPermissionModeCycle() {
+        String current = toolSettingsRepository.getPermissionMode();
+        String next;
+        if (cn.lineai.data.repository.ToolSettingsStore.PERMISSION_AUTO.equals(current)) {
+            next = cn.lineai.data.repository.ToolSettingsStore.PERMISSION_CONFIRM;
+        } else if (cn.lineai.data.repository.ToolSettingsStore.PERMISSION_CONFIRM.equals(current)) {
+            next = cn.lineai.data.repository.ToolSettingsStore.PERMISSION_READONLY;
+        } else {
+            next = cn.lineai.data.repository.ToolSettingsStore.PERMISSION_AUTO;
+        }
+        toolSettingsRepository.setPermissionMode(next);
+        if (cn.lineai.data.repository.ToolSettingsStore.PERMISSION_READONLY.equals(next)) {
+            chatModeRepository.applyPermissionForMode(chatModeRepository.getMode(), toolSettingsRepository);
+        }
+        render();
+    }
+
+    @Override
+    public List<String> getSkillNames() {
+        List<String> names = new ArrayList<>();
+        try {
+            for (cn.lineai.model.SkillRecord skill : extensionRepository.getSkills(projectState.path())) {
+                if (skill != null && skill.getName().length() > 0) {
+                    names.add(skill.getName());
+                }
+            }
+        } catch (Exception e) {
+            android.util.Log.w("MainCoordinator", "getSkillNames failed: " + e.getMessage());
+        }
+        return names;
     }
 
     void resetTodoState() {

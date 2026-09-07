@@ -63,6 +63,12 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         void onAiReasoningEffortChanged(String effort);
 
         int onQueryModelCount(String baseUrl) throws Exception;
+
+        /** 工具栏权限芯片点击：循环切换 auto → confirm → readonly → auto。 */
+        default void onPermissionModeCycle() { }
+
+        /** + 号菜单 Skills 项。 */
+        default void onSkillInsertRequested() { }
     }
 
     /**
@@ -113,6 +119,16 @@ public final class ComposerView extends LinearLayout implements QuoteController.
     private LinearLayout pendingContainer; // 垂直堆叠容器
     private final List<QueuedItem> pendingQueue = new ArrayList<>();
     private boolean wasStreaming = false;
+    // cc-haha 式工具栏：+号 / 权限芯片 / git 芯片 | context% / 模型 / effort
+    private LinearLayout permissionChip;
+    private TextView permissionChipText;
+    private LinearLayout gitChip;
+    private TextView gitChipText;
+    private LinearLayout effortButton;
+    private TextView effortText;
+    private String permissionMode = "auto";
+    private String gitBranch = "";
+    private String reasoningEffort = cn.lineai.model.AiBehaviorSettings.REASONING_MEDIUM;
 
     private static final class QueuedItem {
         final String text;
@@ -150,13 +166,67 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         panel.setBackground(LineTheme.rounded(context, LineTheme.INPUT_BG, 20));
         addView(panel, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
-        LinearLayout metaRow = new LinearLayout(context);
-        metaRow.setOrientation(HORIZONTAL);
-        metaRow.setVisibility(GONE);
-        metaRow.setGravity(Gravity.CENTER_VERTICAL);
-        LineTheme.padding(metaRow, LineTheme.LG, 0, LineTheme.LG, 0);
-        panel.addView(metaRow, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LineTheme.dp(context, 34)));
+        // ===== cc-haha 式工具栏行（inputRow 下方）=====
+        LinearLayout toolbarRow = new LinearLayout(context);
+        toolbarRow.setOrientation(HORIZONTAL);
+        toolbarRow.setGravity(Gravity.CENTER_VERTICAL);
+        LineTheme.padding(toolbarRow, LineTheme.SM, 0, LineTheme.SM, LineTheme.SM);
+        // addView 延后到 inputRow 之后（见构造器末尾），保持输入框在上、工具栏在下
 
+        // 左：权限芯片（点击循环切换）
+        permissionChip = new LinearLayout(context);
+        permissionChip.setOrientation(HORIZONTAL);
+        permissionChip.setGravity(Gravity.CENTER_VERTICAL);
+        permissionChip.setClickable(true);
+        permissionChip.setBackground(LineTheme.rounded(context, LineTheme.SURFACE_LIGHT, 12));
+        LineTheme.padding(permissionChip, LineTheme.SM, 4, LineTheme.SM, 4);
+        IconButtonView permIcon = new IconButtonView(context, IconButtonView.SHIELD);
+        permIcon.setIconColor(LineTheme.TEXT_SECONDARY);
+        permIcon.setIconSizeDp(16, 12);
+        permIcon.setClickable(false);
+        permissionChip.addView(permIcon, new LinearLayout.LayoutParams(LineTheme.dp(context, 16), LineTheme.dp(context, 16)));
+        permissionChipText = LineTheme.text(context, "", LineTheme.FONT_XS, LineTheme.TEXT_SECONDARY, Typeface.BOLD);
+        LinearLayout.LayoutParams permTextParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        permTextParams.leftMargin = LineTheme.dp(context, 3);
+        permissionChip.addView(permissionChipText, permTextParams);
+        permissionChip.setOnClickListener(v -> {
+            if (listener != null && !streaming) {
+                listener.onPermissionModeCycle();
+            }
+        });
+        toolbarRow.addView(permissionChip, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+
+        // 左：git 分支芯片（只读，无分支时隐藏）
+        gitChip = new LinearLayout(context);
+        gitChip.setOrientation(HORIZONTAL);
+        gitChip.setGravity(Gravity.CENTER_VERTICAL);
+        gitChip.setBackground(LineTheme.roundedStroke(context, android.graphics.Color.TRANSPARENT, 12, LineTheme.BORDER_LIGHT));
+        LineTheme.padding(gitChip, LineTheme.SM, 4, LineTheme.SM, 4);
+        gitChip.setVisibility(GONE);
+        IconButtonView gitIcon = new IconButtonView(context, IconButtonView.GIT_BRANCH);
+        gitIcon.setIconColor(LineTheme.TEXT_TERTIARY);
+        gitIcon.setIconSizeDp(16, 12);
+        gitIcon.setClickable(false);
+        gitChip.addView(gitIcon, new LinearLayout.LayoutParams(LineTheme.dp(context, 16), LineTheme.dp(context, 16)));
+        gitChipText = LineTheme.text(context, "", LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.NORMAL);
+        gitChipText.setSingleLine(true);
+        gitChipText.setMaxWidth(LineTheme.dp(context, 120));
+        gitChipText.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        LinearLayout.LayoutParams gitTextParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        gitTextParams.leftMargin = LineTheme.dp(context, 3);
+        LinearLayout.LayoutParams gitChipParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        gitChipParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
+        gitChip.addView(gitChipText, gitTextParams);
+        toolbarRow.addView(gitChip, gitChipParams);
+
+        View toolbarSpacer = new View(context);
+        toolbarRow.addView(toolbarSpacer, new LinearLayout.LayoutParams(0, 1, 1f));
+
+        // 右：上下文用量 NN%
+        contextText = LineTheme.text(context, "", LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.BOLD);
+        toolbarRow.addView(contextText, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
+
+        // 右：模型胶囊（原 metaRow 挪入）
         modelSelectorButton = new LinearLayout(context);
         modelSelectorButton.setOrientation(HORIZONTAL);
         modelSelectorButton.setGravity(Gravity.CENTER_VERTICAL);
@@ -165,13 +235,11 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         modelSelectorButton.setOnClickListener(v -> showModelPopup(modelSelectorButton));
         modelSelectorButton.setBackground(LineTheme.rounded(context, LineTheme.SURFACE_LIGHT, 14));
         LineTheme.padding(modelSelectorButton, LineTheme.SM, 0, LineTheme.SM, 0);
-
         modelText = LineTheme.textMedium(context, "", LineTheme.FONT_XS, LineTheme.TEXT_SECONDARY);
         modelText.setSingleLine(true);
-        modelText.setMaxWidth(LineTheme.dp(context, 180));
+        modelText.setMaxWidth(LineTheme.dp(context, 120));
         modelText.setEllipsize(TextUtils.TruncateAt.END);
         modelSelectorButton.addView(modelText, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
-
         modelChevron = new IconButtonView(context, IconButtonView.CHEVRON_DOWN);
         modelChevron.setIconColor(LineTheme.TEXT_SECONDARY);
         modelChevron.setIconSizeDp(16, 12);
@@ -179,15 +247,30 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         LinearLayout.LayoutParams modelChevronParams = new LinearLayout.LayoutParams(LineTheme.dp(context, 16), LineTheme.dp(context, 16));
         modelChevronParams.leftMargin = LineTheme.dp(context, 2);
         modelSelectorButton.addView(modelChevron, modelChevronParams);
+        LinearLayout.LayoutParams modelParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        modelParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
+        toolbarRow.addView(modelSelectorButton, modelParams);
 
-        metaRow.addView(modelSelectorButton, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
-
-        android.view.View metaSpacer = new android.view.View(context);
-        metaRow.addView(metaSpacer, new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f));
-
-        contextText = LineTheme.text(context, "", LineTheme.FONT_XS, LineTheme.TEXT_TERTIARY, Typeface.BOLD);
-        LinearLayout.LayoutParams contextParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
-        metaRow.addView(contextText, contextParams);
+        // 右：推理 effort 按钮
+        effortButton = new LinearLayout(context);
+        effortButton.setOrientation(HORIZONTAL);
+        effortButton.setGravity(Gravity.CENTER_VERTICAL);
+        effortButton.setClickable(true);
+        effortButton.setBackground(LineTheme.rounded(context, LineTheme.SURFACE_LIGHT, 12));
+        LineTheme.padding(effortButton, LineTheme.SM, 4, LineTheme.SM, 4);
+        IconButtonView effortIcon = new IconButtonView(context, IconButtonView.ZAP);
+        effortIcon.setIconColor(LineTheme.TEXT_SECONDARY);
+        effortIcon.setIconSizeDp(16, 12);
+        effortIcon.setClickable(false);
+        effortButton.addView(effortIcon, new LinearLayout.LayoutParams(LineTheme.dp(context, 16), LineTheme.dp(context, 16)));
+        effortText = LineTheme.text(context, "", LineTheme.FONT_XS, LineTheme.TEXT_SECONDARY, Typeface.BOLD);
+        LinearLayout.LayoutParams effortTextParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        effortTextParams.leftMargin = LineTheme.dp(context, 3);
+        effortButton.addView(effortText, effortTextParams);
+        LinearLayout.LayoutParams effortParams = new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+        effortParams.leftMargin = LineTheme.dp(context, LineTheme.SM);
+        effortButton.setOnClickListener(v -> showEffortPopup());
+        toolbarRow.addView(effortButton, effortParams);
 
         android.view.View divider = new android.view.View(context);
         divider.setBackgroundColor(LineTheme.BORDER_LIGHT);
@@ -228,15 +311,17 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         inputRow.setGravity(Gravity.BOTTOM);
         LineTheme.padding(inputRow, 8, 6, 8, 6);
         panel.addView(inputRow, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        // 工具栏紧跟输入框（cc-haha 布局：输入框上、工具栏下）
+        panel.addView(toolbarRow, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
         attachButton = new IconButtonView(context, IconButtonView.PLUS);
         attachButton.setIconColor(LineTheme.TEXT_SECONDARY);
         attachButton.setIconSizeDp(44, 20);
         attachButton.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-        attachButton.setContentDescription(context.getString(R.string.composer_image_button_desc));
+        attachButton.setContentDescription(context.getString(R.string.composer_plus_menu_desc));
         attachButton.setOnClickListener(v -> {
-            if (!streaming && listener != null) {
-                listener.onAttachClick();
+            if (!streaming) {
+                showConversationMenu();
             }
         });
 
@@ -587,6 +672,15 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         contextText.setText(state.getContextLabel());
         contextText.setTextColor(state.getContextPercent() >= 80 ? LineTheme.WARNING : LineTheme.TEXT_TERTIARY);
         chatMode = state.getChatMode();
+        // 工具栏芯片：权限 / git 分支 / effort
+        permissionMode = state.getPermissionMode();
+        permissionChipText.setText(permissionLabel(getContext(), permissionMode));
+        gitBranch = state.getGitBranch();
+        gitChipText.setText(gitBranch);
+        gitChip.setVisibility(gitBranch.length() == 0 ? GONE : VISIBLE);
+        reasoningEffort = state.getReasoningEffort();
+        effortText.setText(effortShortLabel(
+                cn.lineai.model.AiBehaviorSettings.normalizeReasoningEffort(reasoningEffort)));
         updateEnterKeyBehavior(state.getEnterKeyBehavior());
         if (streaming && modePopup != null) {
             modePopup.dismiss();
@@ -641,10 +735,18 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         LineTheme.padding(content, 28, 24, 28, 28);
         TextView title = LineTheme.textMedium(getContext(), getContext().getString(R.string.chat_context_title), 22, LineTheme.TEXT);
         content.addView(title, new LayoutParams(LayoutParams.MATCH_PARENT, LineTheme.dp(getContext(), 52)));
+        // cc-haha + 号菜单核心四项
         addContextOption(content, getContext().getString(R.string.chat_context_files), () -> listener.onAttachClick());
         addContextOption(content, getContext().getString(R.string.composer_image_button_desc), () -> listener.onImagePickerClick());
-        addContextOption(content, modelText.getText().toString(), () -> showModelPopup(attachButton));
-        addContextOption(content, getContext().getString(R.string.chat_context_mode, modeLabel(chatMode)), () -> showModePopup(attachButton));
+        addContextOption(content, getContext().getString(R.string.composer_plus_slash_commands), () -> {
+            input.setText("/");
+            input.setSelection(input.getText().length());
+            input.post(input::requestFocus);
+        });
+        addContextOption(content, getContext().getString(R.string.composer_plus_skills), () -> listener.onSkillInsertRequested());
+        // 保留原有快捷项
+        addContextOption(content, modelText.getText().toString(), () -> showModelPopup(modelSelectorButton));
+        addContextOption(content, getContext().getString(R.string.chat_context_mode, modeLabel(chatMode)), () -> showModePopup(modeSelectorButton));
         addContextOption(content, getContext().getString(R.string.chat_context_workspace), () -> listener.onProjectClick());
         addContextOption(content, getContext().getString(R.string.header_permission_desc), () -> listener.onPermissionClick());
         addContextOption(content, getContext().getString(R.string.chat_context_settings), () -> listener.onSettingsClick());
@@ -1265,6 +1367,56 @@ public final class ComposerView extends LinearLayout implements QuoteController.
                     }), new LayoutParams(-1, -2));
         }
         DialogBuilder.showBottomSheet(contextDialog, panel);
+    }
+
+    /** 推理 effort 快捷弹层（cc-haha ReasoningEffortPopover 复刻）。 */
+    private void showEffortPopup() {
+        if (streaming) return;
+        dismissSlashPopup();
+        if (contextDialog != null) contextDialog.dismiss();
+        contextDialog = DialogBuilder.create(getContext());
+        LinearLayout panel = choicePanel(getContext().getString(R.string.composer_effort_title));
+        String[] efforts = {cn.lineai.model.AiBehaviorSettings.REASONING_LOW,
+                cn.lineai.model.AiBehaviorSettings.REASONING_MEDIUM,
+                cn.lineai.model.AiBehaviorSettings.REASONING_HIGH,
+                cn.lineai.model.AiBehaviorSettings.REASONING_MAX};
+        String[] labels = {effortLabel(efforts[0]), effortLabel(efforts[1]),
+                effortLabel(efforts[2]), effortLabel(efforts[3])};
+        for (int i = 0; i < efforts.length; i++) {
+            final String effort = efforts[i];
+            panel.addView(new OptionRowView(getContext(), IconButtonView.ZAP, labels[i], null,
+                    effort.equals(reasoningEffort), () -> {
+                        contextDialog.dismiss();
+                        if (listener != null && !effort.equals(reasoningEffort)) {
+                            listener.onAiReasoningEffortChanged(effort);
+                        }
+                    }), new LayoutParams(-1, -2));
+        }
+        DialogBuilder.showBottomSheet(contextDialog, panel);
+    }
+
+    private static String effortLabel(String effort) {
+        if (cn.lineai.model.AiBehaviorSettings.REASONING_LOW.equals(effort)) return "Low";
+        if (cn.lineai.model.AiBehaviorSettings.REASONING_HIGH.equals(effort)) return "High";
+        if (cn.lineai.model.AiBehaviorSettings.REASONING_MAX.equals(effort)) return "Max";
+        return "Medium";
+    }
+
+    private static String effortShortLabel(String effort) {
+        if (cn.lineai.model.AiBehaviorSettings.REASONING_LOW.equals(effort)) return "L";
+        if (cn.lineai.model.AiBehaviorSettings.REASONING_HIGH.equals(effort)) return "H";
+        if (cn.lineai.model.AiBehaviorSettings.REASONING_MAX.equals(effort)) return "MAX";
+        return "M";
+    }
+
+    private static String permissionLabel(Context context, String mode) {
+        if (cn.lineai.data.repository.ToolSettingsStore.PERMISSION_CONFIRM.equals(mode)) {
+            return context.getString(R.string.composer_permission_confirm);
+        }
+        if (cn.lineai.data.repository.ToolSettingsStore.PERMISSION_READONLY.equals(mode)) {
+            return context.getString(R.string.composer_permission_readonly);
+        }
+        return context.getString(R.string.composer_permission_auto);
     }
 
     private String modeLabel(String mode) {

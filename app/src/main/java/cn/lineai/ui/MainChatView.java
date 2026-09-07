@@ -324,6 +324,16 @@ public final class MainChatView extends FrameLayout implements MainContract.View
             }
 
             @Override
+            public void onPermissionModeCycle() {
+                MainChatView.this.presenter.onPermissionModeCycle();
+            }
+
+            @Override
+            public void onSkillInsertRequested() {
+                showSkillPicker();
+            }
+
+            @Override
             public void onAiReasoningEffortChanged(String effort) {
                 MainChatView.this.presenter.onAiReasoningEffortChanged(effort);
             }
@@ -513,9 +523,38 @@ public final class MainChatView extends FrameLayout implements MainContract.View
         }
     }
 
+    /** + 号菜单 Skills 项：弹出当前工作区可用 Skill 列表，选中插入到输入框。 */
+    private void showSkillPicker() {
+        List<String> skillNames = presenter.getSkillNames();
+        if (skillNames == null || skillNames.isEmpty()) {
+            android.widget.Toast.makeText(getContext(),
+                    getContext().getString(R.string.composer_skills_empty), android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        android.app.Dialog dialog = cn.lineai.ui.component.DialogBuilder.create(getContext());
+        LinearLayout panel = new LinearLayout(getContext());
+        panel.setOrientation(LinearLayout.VERTICAL);
+        cn.lineai.ui.theme.LineTheme.padding(panel, 24, 24, 24, 24);
+        TextView title = cn.lineai.ui.theme.LineTheme.textMedium(getContext(),
+                getContext().getString(R.string.composer_plus_skills), 22, cn.lineai.ui.theme.LineTheme.TEXT);
+        panel.addView(title, new LayoutParams(LayoutParams.MATCH_PARENT, cn.lineai.ui.theme.LineTheme.dp(getContext(), 52)));
+        for (final String name : skillNames) {
+            TextView row = cn.lineai.ui.theme.LineTheme.text(getContext(), name, 15,
+                    cn.lineai.ui.theme.LineTheme.TEXT, android.graphics.Typeface.NORMAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(cn.lineai.ui.theme.LineTheme.dp(getContext(), 52));
+            row.setClickable(true);
+            row.setOnClickListener(v -> {
+                dialog.dismiss();
+                setComposerDraft("使用 Skill: " + name + " ", null);
+            });
+            panel.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+        }
+        cn.lineai.ui.component.DialogBuilder.showBottomSheet(dialog, panel);
+    }
+
     /** 头部模型胶囊点击：弹出分组模型选择器（当前模型置顶，含管理入口）。 */
-    private void showModelQuickSwitchDialog() {
-        ChatUiState state = lastState;
+    private void showModelQuickSwitchDialog() {        ChatUiState state = lastState;
         if (state == null) {
             return;
         }

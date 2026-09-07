@@ -149,8 +149,9 @@ public final class ModelListScreenView extends LinearLayout {
             String groupKey = group.groupId;
             boolean selectedGroup = group.containsSelected;
             addGroupHeader(context, group, selectedGroup, multiSelect);
-            // 默认折叠只显主模型行；selected 组与多选模式强制展开
-            boolean collapsed = !multiSelect && !selectedGroup
+            // 管理页：默认折叠只显主模型行（selected 组与多选强制展开）；
+            // 只读选择页（图片理解/生成等 picker）：无展开交互，强制全部展开
+            boolean collapsed = allowManagement && !multiSelect && !selectedGroup
                     && !Boolean.FALSE.equals(groupCollapsed.get(groupKey));
             if (!collapsed) {
                 for (ModelConfig model : group.models) {

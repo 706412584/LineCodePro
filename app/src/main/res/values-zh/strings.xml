@@ -48,6 +48,14 @@
     <string name="composer_hint_no_model">请先到设置 → 模型管理配置模型</string>
     <string name="composer_attachment_remove_desc">移除附件</string>
     <string name="composer_image_button_desc">选择图片发送</string>
+    <string name="composer_plus_menu_desc">插入工具</string>
+    <string name="composer_plus_slash_commands">斜杠命令</string>
+    <string name="composer_plus_skills">Skills</string>
+    <string name="composer_skills_empty">还没有安装 Skill</string>
+    <string name="composer_effort_title">推理强度</string>
+    <string name="composer_permission_auto">自动</string>
+    <string name="composer_permission_confirm">确认</string>
+    <string name="composer_permission_readonly">只读</string>
     <string name="composer_image_remove_desc">移除已选图片</string>
     <string name="composer_image_loading">正在加载图片…</string>
     <string name="composer_image_load_failed">加载图片失败</string>

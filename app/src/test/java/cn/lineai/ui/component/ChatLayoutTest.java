@@ -78,7 +78,8 @@ public class ChatLayoutTest {
     @Test public void emptyComposerStaysCompactAndGrowsForOnlyThreeLines() {
         ComposerView composer = new ComposerView(activity); activity.setContentView(composer);
         int empty = wrapHeight(composer, 390);
-        assertTrue("Empty composer including margins: " + empty, empty <= 94);
+        // 上限含 cc-haha 式工具栏行（权限/git/模型/effort 芯片）
+        assertTrue("Empty composer including margins: " + empty, empty <= 136);
         EditText input = find(composer, EditText.class);
         input.setText("one\ntwo\nthree\nfour\nfive\nsix\nseven");
         int grown = wrapHeight(composer, 390);

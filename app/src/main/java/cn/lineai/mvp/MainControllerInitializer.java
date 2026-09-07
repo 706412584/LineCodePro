@@ -590,6 +590,15 @@ final class MainControllerInitializer {
                     }
                 }
         );
+        coordinator.gitBranchController = new GitBranchController(
+                context,
+                dependencies.ipcProviderManager,
+                backgroundTasks,
+                mainThread,
+                branch -> {
+                    coordinator.updateGitBranch(branch);
+                }
+        );
         coordinator.agentExecutionController = new AgentExecutionController(
                 modelClient,
                 aiBehaviorSettingsRepository,

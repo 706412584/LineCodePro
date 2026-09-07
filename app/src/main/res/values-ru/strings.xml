@@ -48,6 +48,14 @@
     <string name="composer_hint_no_model">Сначала настройте модель в Настройки → Управление моделями</string>
     <string name="composer_attachment_remove_desc">Удалить вложение</string>
     <string name="composer_image_button_desc">Выбрать изображение для отправки</string>
+    <string name="composer_plus_menu_desc">Вставить инструменты</string>
+    <string name="composer_plus_slash_commands">Команды слэша</string>
+    <string name="composer_plus_skills">Skills</string>
+    <string name="composer_skills_empty">Skills пока не установлены</string>
+    <string name="composer_effort_title">Уровень размышлений</string>
+    <string name="composer_permission_auto">Авто</string>
+    <string name="composer_permission_confirm">Подтверждение</string>
+    <string name="composer_permission_readonly">Только чтение</string>
     <string name="composer_image_remove_desc">Удалить выбранное изображение</string>
     <string name="composer_image_loading">Загрузка изображения…</string>
     <string name="composer_image_load_failed">Не удалось загрузить изображение</string>

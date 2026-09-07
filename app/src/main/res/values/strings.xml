@@ -48,6 +48,14 @@
     <string name="composer_hint_no_model">Please configure a model first in Settings → Model management</string>
     <string name="composer_attachment_remove_desc">Remove attachment</string>
     <string name="composer_image_button_desc">Pick an image to send</string>
+    <string name="composer_plus_menu_desc">Insert tools</string>
+    <string name="composer_plus_slash_commands">Slash commands</string>
+    <string name="composer_plus_skills">Skills</string>
+    <string name="composer_skills_empty">No skills installed yet</string>
+    <string name="composer_effort_title">Reasoning effort</string>
+    <string name="composer_permission_auto">Auto</string>
+    <string name="composer_permission_confirm">Confirm</string>
+    <string name="composer_permission_readonly">Readonly</string>
     <string name="composer_image_remove_desc">Remove selected image</string>
     <string name="composer_image_loading">Loading image…</string>
     <string name="composer_image_load_failed">Failed to load image</string>

@@ -15,6 +15,12 @@ public interface MainUiController extends ChatController,
         NavigationController {
     void attachView(MainContract.View view);
 
+    /** 编辑框权限芯片：循环切换 auto → confirm → readonly → auto。 */
+    void onPermissionModeCycle();
+
+    /** 列出当前工作区可用的 Skill 名（+ 号菜单 Skills 项）。 */
+    java.util.List<String> getSkillNames();
+
     void detachView();
 
     void destroy();
