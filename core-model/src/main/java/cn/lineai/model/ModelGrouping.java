@@ -87,8 +87,8 @@ public final class ModelGrouping {
             }
             String key = model.getGroupId().length() > 0
                     ? model.getGroupId()
-                    // 旧数据独立成组：用行 id 保证唯一
-                    : "solo:" + model.getId();
+                    // 旧数据按「服务商名+baseUrl」聚为同一服务商（cc-haha 语义）
+                    : "solo:" + model.getProviderLabel() + "@" + model.getBaseUrl();
             List<ModelConfig> bucket = byGroup.get(key);
             if (bucket == null) {
                 bucket = new ArrayList<>();
@@ -111,7 +111,11 @@ public final class ModelGrouping {
         String safeSelected = selectedId == null ? "" : selectedId;
         for (Map.Entry<String, List<ModelConfig>> entry : byGroup.entrySet()) {
             List<ModelConfig> bucket = entry.getValue();
-            String name = bucket.get(0).getProviderLabel();
+            // solo 组（旧数据）显示用户配置名，正式组显示 providerLabel
+            boolean solo = entry.getKey().startsWith("solo:");
+            String name = solo && bucket.get(0).getName().length() > 0
+                    ? bucket.get(0).getName()
+                    : bucket.get(0).getProviderLabel();
             boolean containsSelected = false;
             for (ModelConfig model : bucket) {
                 if (model.getId().equals(safeSelected)) {

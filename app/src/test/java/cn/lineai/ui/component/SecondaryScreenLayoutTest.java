@@ -134,7 +134,7 @@ public class SecondaryScreenLayoutTest {
         ModelConfig model=ModelConfig.builder("one","工作模型",ModelProtocolType.OPENAI_COMPATIBLE,"Custom","https://example.invalid/v1","","example-model").build();
         ModelListScreenView view=new ModelListScreenView(activity,Collections.singletonList(model),"one",listener(ModelListScreenView.Listener.class));
         activity.setContentView(view);layout(view,390,844);
-        View row=clickable(text(view,"工作模型"));row.performClick();assertTrue(events.contains("onSelectModel"));
+        View row=modelRowById(view,"example-model");row.performClick();assertTrue(events.contains("onSelectModel"));
         row.performLongClick();android.app.Dialog dialog=org.robolectric.shadows.ShadowDialog.getLatestDialog();assertTrue(dialog.isShowing());
         clickable(text(dialog.getWindow().getDecorView(),activity.getString(cn.lineai.R.string.screen_models_action_modify))).performClick();
         assertTrue(events.contains("onEditModel"));
@@ -200,7 +200,7 @@ public class SecondaryScreenLayoutTest {
                 "Custom", "https://example.invalid/v1", "", "example-model").build();
         ModelListScreenView list = new ModelListScreenView(activity, Collections.singletonList(model), "one", listener(ModelListScreenView.Listener.class));
         activity.setContentView(list); layout(list, 390, 844);
-        clickable(text(list, "工作模型")).performLongClick();
+        clickable(modelRowById(list, "example-model")).performLongClick();
         dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog();
         android.widget.ScrollView scroll = find(dialog.getWindow().getDecorView(), android.widget.ScrollView.class);
         scroll.measure(View.MeasureSpec.makeMeasureSpec(358, View.MeasureSpec.EXACTLY),
@@ -263,6 +263,9 @@ public class SecondaryScreenLayoutTest {
 
     private static View clickable(View view){while(!view.isClickable()&&view.getParent() instanceof View)view=(View)view.getParent();return view;}
     private static TextView text(View root,String value) {if(root instanceof TextView && value.contentEquals(((TextView)root).getText()))return (TextView)root;if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){TextView v=text(((ViewGroup)root).getChildAt(i),value);if(v!=null)return v;}return null;}
+    /** 分组列表中按 modelId 副行定位模型行容器（组头显示同名 name 会抢先命中 text()）。 */
+    private static View modelRowById(View root,String modelId) {TextView sub=text(root,modelId);return sub==null?null:clickableRowOf(sub);}
+    private static View clickableRowOf(View view){while(!(view.isClickable()&&view instanceof android.widget.LinearLayout)&&view.getParent() instanceof View)view=(View)view.getParent();return view;}
     private static <T> T find(View root,Class<T> type) {if(type.isInstance(root))return type.cast(root);if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){T v=find(((ViewGroup)root).getChildAt(i),type);if(v!=null)return v;}return null;}
     private void screenshot(View view,String name) throws Exception {
         File file=new File("build/reports/ui-previews/"+name+".png");file.getParentFile().mkdirs();

@@ -889,7 +889,8 @@ public final class ScreenFactories {
 
                 @Override
                 public void onAddModel() {
-                    controller.onSettingsItemSelected("modelAddOptions");
+                    // 统一走 4 槽位服务商表单（自定义预设）
+                    controller.onSettingsItemSelected("providerForm:custom");
                 }
 
                 @Override

@@ -36,13 +36,22 @@ public final class ModelGroupingTest {
     }
 
     @Test
-    public void legacyRowsBecomeSoloGroups() {
-        List<ModelConfig> models = Arrays.asList(
-                model("a", "m1", "", ""),
-                model("b", "m2", "", ""));
+    public void legacyRowsAggregateByProviderAndBaseUrl() {
+        // 旧数据（无 groupId）：同服务商名+baseUrl 聚为一组，不同地址各自成组
+        List<ModelConfig> models = new ArrayList<>();
+        models.add(model("a", "m1", "", ""));
+        models.add(model("b", "m2", "", ""));
         List<ModelGrouping.ProviderGroup> groups = ModelGrouping.groupForUi(models, "");
-        Assert.assertEquals(2, groups.size()); // 各自独立，不按 providerLabel 合并
+        Assert.assertEquals(1, groups.size()); // 同 OpenAI + 同 baseUrl → 一个组
+        Assert.assertEquals(2, groups.get(0).models.size());
         Assert.assertTrue(groups.get(0).groupId.startsWith("solo:"));
+
+        ModelConfig other = new ModelConfig("c", "m3", ModelProtocolType.ANTHROPIC_MESSAGES,
+                "Anthropic", "https://api.anthropic.com", "k", "m3",
+                200, false, true, "", 0, "", "");
+        models.add(other);
+        groups = ModelGrouping.groupForUi(models, "");
+        Assert.assertEquals(2, groups.size());
     }
 
     @Test
