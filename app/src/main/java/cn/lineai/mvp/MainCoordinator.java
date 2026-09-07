@@ -547,6 +547,7 @@ public final class MainCoordinator implements MainUiController {
     @Override
     public void onAiReasoningEffortChanged(String effort) {
         settingsManagementController.setAiReasoningEffort(effort);
+        render();
     }
 
     @Override

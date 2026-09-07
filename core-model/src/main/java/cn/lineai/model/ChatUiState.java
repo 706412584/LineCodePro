@@ -149,19 +149,29 @@ public final class ChatUiState {
                 : Collections.unmodifiableList(new ArrayList<>(availableModels));
     }
 
-    public ToolApproval getToolApproval() { return toolApproval; }
     public ChatUiState withToolApproval(ToolApproval approval) {
-        return new ChatUiState(projectLabel, projectPath, modelLabel, contextLabel, contextPercent, streaming,
+        ChatUiState next = new ChatUiState(projectLabel, projectPath, modelLabel, contextLabel, contextPercent, streaming,
                 hasConfiguredModel, thinkingScrollEnabled, thinkingAutoExpandEnabled, processAutoExpandEnabled,
                 codeWrapEnabled, browserMode,
                 enterKeyBehavior, chatMode, conversationId, messages, selectedModelId, availableModels, approval);
+        return copyToolbarState(next);
     }
     public ChatUiState withDisplayMessages(List<ChatMessage> displayMessages) {
-        return new ChatUiState(projectLabel, projectPath, modelLabel, contextLabel, contextPercent, streaming,
+        ChatUiState next = new ChatUiState(projectLabel, projectPath, modelLabel, contextLabel, contextPercent, streaming,
                 hasConfiguredModel, thinkingScrollEnabled, thinkingAutoExpandEnabled, processAutoExpandEnabled,
                 codeWrapEnabled, browserMode, enterKeyBehavior, chatMode, conversationId, displayMessages,
                 selectedModelId, availableModels, toolApproval);
+        return copyToolbarState(next);
     }
+
+    /** with* 派生状态时保留编辑框工具栏字段（权限/git 分支/推理 effort），否则工具栏芯片会回退到默认值。 */
+    private ChatUiState copyToolbarState(ChatUiState next) {
+        next.permissionMode = permissionMode;
+        next.gitBranch = gitBranch;
+        next.reasoningEffort = reasoningEffort;
+        return next;
+    }
+    public ToolApproval getToolApproval() { return toolApproval; }
     public String getProjectLabel() { return projectLabel; }
     public String getProjectPath() { return projectPath; }
     public String getModelLabel() { return modelLabel; }

@@ -19,7 +19,6 @@ import cn.lineai.model.ChatUiState;
 import cn.lineai.model.ChatMessage;
 import cn.lineai.model.FileTreeNode;
 import cn.lineai.model.InputAttachment;
-import cn.lineai.model.ModelConfig;
 import cn.lineai.model.SheetOption;
 import cn.lineai.mvp.MainContract;
 import cn.lineai.mvp.MainUiController;
@@ -66,7 +65,6 @@ import cn.lineai.ui.component.SettingsScreenView;
 import cn.lineai.ui.component.ShellCommandScreenView;
 import cn.lineai.ui.component.SimpleScreenContent;
 import cn.lineai.ui.component.SimpleSettingsScreenView;
-import cn.lineai.ui.component.ModelPickerDialog;
 import cn.lineai.ui.component.SshSettingsScreenView;
 import cn.lineai.ui.component.StorageManagementScreenView;
 import cn.lineai.ui.component.TerminalProviderDetailScreenView;
@@ -185,11 +183,6 @@ public final class MainChatView extends FrameLayout implements MainContract.View
             @Override
             public void onMoreClick() {
                 MainChatView.this.presenter.onMoreClick();
-            }
-
-            @Override
-            public void onModelClick() {
-                showModelQuickSwitchDialog();
             }
         });
         contentView.addView(headerView, new LinearLayout.LayoutParams(
@@ -551,30 +544,6 @@ public final class MainChatView extends FrameLayout implements MainContract.View
             panel.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
         }
         cn.lineai.ui.component.DialogBuilder.showBottomSheet(dialog, panel);
-    }
-
-    /** 头部模型胶囊点击：弹出分组模型选择器（当前模型置顶，含管理入口）。 */
-    private void showModelQuickSwitchDialog() {        ChatUiState state = lastState;
-        if (state == null) {
-            return;
-        }
-        List<ModelConfig> models = state.getAvailableModels();
-        if (models == null || models.isEmpty()) {
-            presenter.showModelManagement();
-            return;
-        }
-        ModelPickerDialog.showGrouped(getContext(), models, state.getSelectedModelId(),
-                new ModelPickerDialog.OnGroupedModelSelectedListener() {
-                    @Override
-                    public void onModelSelected(String configId) {
-                        presenter.onModelQuickSwitch(configId);
-                    }
-
-                    @Override
-                    public void onManageModels() {
-                        presenter.showModelManagement();
-                    }
-                });
     }
 
     @Override

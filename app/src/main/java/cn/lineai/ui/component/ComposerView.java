@@ -191,7 +191,7 @@ public final class ComposerView extends LinearLayout implements QuoteController.
         permissionChip.addView(permissionChipText, permTextParams);
         permissionChip.setOnClickListener(v -> {
             if (listener != null && !streaming) {
-                listener.onPermissionModeCycle();
+                listener.onPermissionClick();
             }
         });
         toolbarRow.addView(permissionChip, new LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
@@ -1382,10 +1382,11 @@ public final class ComposerView extends LinearLayout implements QuoteController.
                 cn.lineai.model.AiBehaviorSettings.REASONING_MAX};
         String[] labels = {effortLabel(efforts[0]), effortLabel(efforts[1]),
                 effortLabel(efforts[2]), effortLabel(efforts[3])};
+        String currentEffort = cn.lineai.model.AiBehaviorSettings.normalizeReasoningEffort(reasoningEffort);
         for (int i = 0; i < efforts.length; i++) {
             final String effort = efforts[i];
             panel.addView(new OptionRowView(getContext(), IconButtonView.ZAP, labels[i], null,
-                    effort.equals(reasoningEffort), () -> {
+                    effort.equals(currentEffort), () -> {
                         contextDialog.dismiss();
                         if (listener != null && !effort.equals(reasoningEffort)) {
                             listener.onAiReasoningEffortChanged(effort);
