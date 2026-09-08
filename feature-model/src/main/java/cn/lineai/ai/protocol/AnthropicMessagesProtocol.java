@@ -61,36 +61,53 @@ public final class AnthropicMessagesProtocol extends AbstractHttpModelProtocol {
             ModelCancellationToken cancellationToken,
             ModelRequestOptions options
     ) throws ModelCompletionException {
+        ModelRequestOptions requestOptions = options == null ? ModelRequestOptions.defaults() : options;
+        JSONObject body;
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("x-api-key", config.getApiKey());
+        headers.put("anthropic-version", "2023-06-01");
         try {
-            ModelRequestOptions requestOptions = options == null ? ModelRequestOptions.defaults() : options;
-            JSONObject body = buildRequestBody(config, messages, requestOptions);
-
-            HashMap<String, String> headers = new HashMap<>();
-            headers.put("x-api-key", config.getApiKey());
-            headers.put("anthropic-version", "2023-06-01");
-
-            StringBuilder text = new StringBuilder();
-            StringBuilder reasoning = new StringBuilder();
-            HashMap<Integer, ToolUseBuilder> toolUseBuilders = new HashMap<>();
-            final int[] usageInputTokens = new int[1];
-            final int[] usageOutputTokens = new int[1];
-
-            postJsonSse(endpoint(config.getBaseUrl(), "/v1/messages"), body, headers, cancellationToken, (eventType, data) -> {
-                handleSseEvent(data, callback, text, reasoning, toolUseBuilders, usageInputTokens, usageOutputTokens);
-            });
-
-            return new ModelCompletionResponse(
-                    text.toString(),
-                    reasoning.toString(),
-                    buildToolCalls(toolUseBuilders),
-                    usageInputTokens[0],
-                    usageOutputTokens[0]
-            );
-        } catch (ModelCompletionException e) {
-            throw e;
+            body = buildRequestBody(config, messages, requestOptions);
         } catch (Exception e) {
-            throw new ModelCompletionException("Anthropic Messages protocol stream parse failed: " + e.getMessage(), e);
+            throw new ModelCompletionException("Anthropic request build failed: " + e.getMessage(), e);
         }
+
+        StringBuilder text = new StringBuilder();
+        StringBuilder reasoning = new StringBuilder();
+        HashMap<Integer, ToolUseBuilder> toolUseBuilders = new HashMap<>();
+        final int[] usageInputTokens = new int[1];
+        final int[] usageOutputTokens = new int[1];
+        // 部分内容保留（cc-haha commit buffer）
+        cn.lineai.ai.retry.AssistantCommitBuffer commitBuffer = new cn.lineai.ai.retry.AssistantCommitBuffer();
+
+        try {
+        postJsonSse(endpoint(config.getBaseUrl(), "/v1/messages"), body, headers, cancellationToken, (eventType, data) -> {
+            handleSseEvent(data, callback, text, reasoning, toolUseBuilders, usageInputTokens, usageOutputTokens, commitBuffer);
+        });
+
+        return new ModelCompletionResponse(
+                text.toString(),
+                reasoning.toString(),
+                buildToolCalls(toolUseBuilders),
+                usageInputTokens[0],
+                usageOutputTokens[0]
+        );
+        } catch (ModelCompletionException e) {
+            throw attachPartial(e, commitBuffer);
+        } catch (Exception e) {
+            throw attachPartial(
+                    new ModelCompletionException("Anthropic Messages protocol stream parse failed: " + e.getMessage(), e),
+                    commitBuffer);
+        }
+    }
+
+    /** 流中断且未越过工具边界时，把已收到内容挂到异常上供编排层提交。 */
+    private static ModelCompletionException attachPartial(ModelCompletionException e,
+                                                          cn.lineai.ai.retry.AssistantCommitBuffer buffer) {
+        if (e.hasPartial() || buffer == null || !buffer.hasPartial()) {
+            return e;
+        }
+        return e.withPartial(buffer.text(), buffer.reasoning(), buffer.crossedToolBoundary());
     }
 
     private JSONObject buildRequestBody(
@@ -130,7 +147,8 @@ public final class AnthropicMessagesProtocol extends AbstractHttpModelProtocol {
             StringBuilder reasoning,
             HashMap<Integer, ToolUseBuilder> toolUseBuilders,
             int[] usageInputTokens,
-            int[] usageOutputTokens
+            int[] usageOutputTokens,
+            cn.lineai.ai.retry.AssistantCommitBuffer commitBuffer
     ) throws Exception {
         if ("[DONE]".equals(data.trim())) {
             return;
@@ -164,7 +182,10 @@ public final class AnthropicMessagesProtocol extends AbstractHttpModelProtocol {
                 String blockType = block.optString("type");
                 if ("redacted_thinking".equals(blockType)) {
                     appendDelta(reasoning, "[redacted thinking]", true, callback);
+                    commitBuffer.appendReasoning("[redacted thinking]");
                 } else if ("tool_use".equals(blockType)) {
+                    // 副作用边界：工具调用块开始，此后断流不可重发
+                    commitBuffer.markToolUseStarted();
                     startToolUse(toolUseBuilders, event.optInt("index", toolUseBuilders.size()), block);
                 }
             }
@@ -181,9 +202,13 @@ public final class AnthropicMessagesProtocol extends AbstractHttpModelProtocol {
         }
         String deltaType = delta.optString("type");
         if ("thinking_delta".equals(deltaType)) {
-            appendDelta(reasoning, delta.optString("thinking"), true, callback);
+            String value = delta.optString("thinking");
+            appendDelta(reasoning, value, true, callback);
+            commitBuffer.appendReasoning(value);
         } else if ("text_delta".equals(deltaType)) {
-            appendDelta(text, delta.optString("text"), false, callback);
+            String value = delta.optString("text");
+            appendDelta(text, value, false, callback);
+            commitBuffer.appendText(value);
         } else if ("input_json_delta".equals(deltaType)) {
             appendToolUseInput(toolUseBuilders, event.optInt("index", toolUseBuilders.size()), delta.optString("partial_json"));
         }

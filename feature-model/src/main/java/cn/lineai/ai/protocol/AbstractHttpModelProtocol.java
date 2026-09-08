@@ -31,6 +31,9 @@ abstract class AbstractHttpModelProtocol implements ModelProtocol {
     protected static final int REASONING_BUDGET_MAX = 16000;
     protected static final int REASONING_BUDGET_DEFAULT = 4096;
 
+    /** 流空闲看门狗阈值：90s 无任何 SSE 数据视为卡死（借鉴 cc-haha streamWatchdog 默认值）。 */
+    protected static final long STREAM_IDLE_TIMEOUT_MS = 90_000L;
+
     protected int thinkingBudget(String effort) {
         if (AiBehaviorSettings.REASONING_LOW.equals(effort)) {
             return REASONING_BUDGET_LOW;
@@ -105,6 +108,9 @@ abstract class AbstractHttpModelProtocol implements ModelProtocol {
         String response = "";
         StringBuilder sseLog = new StringBuilder();
         int code = -1;
+        // 流空闲看门狗：90s 无数据（含首 token）视为卡死，disconnect 解除阻塞读
+        java.util.concurrent.atomic.AtomicBoolean watchdogFired = new java.util.concurrent.atomic.AtomicBoolean(false);
+        cn.lineai.ai.retry.StreamWatchdog watchdog = new cn.lineai.ai.retry.StreamWatchdog(STREAM_IDLE_TIMEOUT_MS);
         try {
             connection = openJsonPost(url, body, headers, "text/event-stream");
             HttpURLConnection activeConnection = connection;
@@ -115,12 +121,21 @@ abstract class AbstractHttpModelProtocol implements ModelProtocol {
             code = connection.getResponseCode();
             if (code < 200 || code >= 300) {
                 response = readAll(connection.getErrorStream());
-                ModelCompletionException exception = new ModelCompletionException("HTTP " + code + ": " + response);
+                String retryAfter = connection.getHeaderField("Retry-After");
+                ModelCompletionException exception = new ModelCompletionException("HTTP " + code + ": " + response)
+                        .withHttpStatus(code)
+                        .withKind(cn.lineai.ai.retry.ModelApiError.fromThrowable(
+                                new Exception("HTTP " + code + ": " + response)).kind())
+                        .withRetryAfterMs(parseRetryAfterSeconds(retryAfter));
                 logHttpError("sse_http", url, headers, body, code, response, exception);
                 throw exception;
             }
 
-            readSse(connection.getInputStream(), cancellationToken, handler, sseLog);
+            watchdog.start(reason -> {
+                watchdogFired.set(true);
+                activeConnection.disconnect();
+            });
+            readSse(connection.getInputStream(), cancellationToken, handler, sseLog, watchdog);
         } catch (SseStreamCompleteException e) {
             return;
         } catch (ModelCompletionException e) {
@@ -131,15 +146,31 @@ abstract class AbstractHttpModelProtocol implements ModelProtocol {
             }
             response = sseLog.toString();
             logHttpError("sse_io", url, headers, body, code, response, e);
-            throw new ModelCompletionException("Model stream communication failed: " + e.getMessage(), e);
+            ModelCompletionException exception = new ModelCompletionException("Model stream communication failed: " + e.getMessage(), e)
+                    .withKind(cn.lineai.ai.retry.ModelApiError.fromThrowable(e, watchdogFired.get()).kind())
+                    .withWatchdogFired(watchdogFired.get());
+            throw exception;
         } catch (Exception e) {
             response = sseLog.toString();
             logHttpError("sse_error", url, headers, body, code, response, e);
             throw new ModelCompletionException("Model stream communication failed: " + e.getMessage(), e);
         } finally {
+            watchdog.stop();
             if (connection != null) {
                 connection.disconnect();
             }
+        }
+    }
+
+    /** Retry-After header（秒）→ 毫秒；缺失/非数字返回 0。 */
+    private static long parseRetryAfterSeconds(String value) {
+        if (value == null || value.length() == 0) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(value.trim()) * 1000L;
+        } catch (NumberFormatException e) {
+            return 0;
         }
     }
 
@@ -179,12 +210,20 @@ abstract class AbstractHttpModelProtocol implements ModelProtocol {
     }
 
     private void readSse(InputStream stream, ModelCancellationToken cancellationToken, SseEventHandler handler, StringBuilder sseLog) throws Exception {
+        readSse(stream, cancellationToken, handler, sseLog, null);
+    }
+
+    private void readSse(InputStream stream, ModelCancellationToken cancellationToken, SseEventHandler handler,
+                         StringBuilder sseLog, cn.lineai.ai.retry.StreamWatchdog watchdog) throws Exception {
         BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
         try {
             StringBuilder data = new StringBuilder();
             String eventType = "";
             String line;
             while ((cancellationToken == null || !cancellationToken.isCancelled()) && (line = reader.readLine()) != null) {
+                if (watchdog != null) {
+                    watchdog.onActivity();
+                }
                 appendSseLogLine(sseLog, line);
                 if (line.length() == 0) {
                     if (data.length() > 0) {

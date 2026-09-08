@@ -100,9 +100,10 @@ public final class OpenAiCompatibleProtocol extends AbstractHttpModelProtocol {
             ModelCancellationToken cancellationToken,
             ModelRequestOptions options
     ) throws ModelCompletionException {
+        ModelRequestOptions requestOptions = options == null ? ModelRequestOptions.defaults() : options;
+        JSONObject body;
         try {
-            ModelRequestOptions requestOptions = options == null ? ModelRequestOptions.defaults() : options;
-            JSONObject body = new JSONObject();
+            body = new JSONObject();
             body.put("model", ModelContextParser.apiModelId(config));
             body.put("messages", messageSerializer.messagesJson(messages, requestOptions.isPreserveReasoning()));
             body.put("temperature", 0.2);
@@ -112,86 +113,129 @@ public final class OpenAiCompatibleProtocol extends AbstractHttpModelProtocol {
                 body.put("tool_choice", "auto");
             }
             applyReasoningRequest(config, body, requestOptions);
+        } catch (Exception e) {
+            throw new ModelCompletionException("OpenAI request build failed: " + e.getMessage(), e);
+        }
 
-            HashMap<String, String> headers = new HashMap<>();
-            headers.put("Authorization", "Bearer " + config.getApiKey());
+        HashMap<String, String> headers = new HashMap<>();
+        headers.put("Authorization", "Bearer " + config.getApiKey());
 
-            StringBuilder text = new StringBuilder();
-            StringBuilder reasoning = new StringBuilder();
-            ReasoningDeltaExtractor reasoningDeltaExtractor = new ReasoningDeltaExtractor();
-            ThinkTagParser thinkTagParser = new ThinkTagParser();
-            HashMap<Integer, ToolCallBuilder> toolCallBuilders = new HashMap<>();
-            final int[] usageInputTokens = new int[1];
-            final int[] usageOutputTokens = new int[1];
+        StringBuilder text = new StringBuilder();
+        StringBuilder reasoning = new StringBuilder();
+        ReasoningDeltaExtractor reasoningDeltaExtractor = new ReasoningDeltaExtractor();
+        ThinkTagParser thinkTagParser = new ThinkTagParser();
+        HashMap<Integer, ToolCallBuilder> toolCallBuilders = new HashMap<>();
+        final int[] usageInputTokens = new int[1];
+        final int[] usageOutputTokens = new int[1];
+        // 部分内容保留（cc-haha commit buffer）：流中断且未出现工具调用时随异常带出
+        cn.lineai.ai.retry.AssistantCommitBuffer commitBuffer = new cn.lineai.ai.retry.AssistantCommitBuffer();
 
-            postJsonSse(endpoint(config.getBaseUrl(), "/chat/completions"), body, headers, cancellationToken, (eventType, data) -> {
-                if ("[DONE]".equals(data.trim())) {
-                    return;
-                }
-                JSONObject event = new JSONObject(data);
-                if (event.has("error")) {
-                    throw new ModelCompletionException("OpenAI stream error: " + describeError(event.opt("error")));
-                }
-                // 部分兼容端点会在最后一个 chunk（含空 choices）携带 usage，先于 choices 处理。
-                JSONObject usage = event.optJSONObject("usage");
-                if (usage != null) {
-                    usageInputTokens[0] = Math.max(usageInputTokens[0], usage.optInt("prompt_tokens", 0));
-                    usageOutputTokens[0] = Math.max(usageOutputTokens[0], usage.optInt("completion_tokens", 0));
-                }
-                JSONArray choices = event.optJSONArray("choices");
-                if (choices == null || choices.length() == 0) {
-                    return;
-                }
-                JSONObject choice = choices.optJSONObject(0);
-                if (choice == null) {
-                    return;
-                }
-                if ("content_filter".equals(choice.optString("finish_reason"))) {
-                    throw new ModelCompletionException("OpenAI stream error: output blocked by content safety policy");
-                }
-                JSONObject delta = choice.optJSONObject("delta");
-                if (delta == null) {
-                    return;
-                }
+        try {
+        postJsonSse(endpoint(config.getBaseUrl(), "/chat/completions"), body, headers, cancellationToken, (eventType, data) -> {
+            if ("[DONE]".equals(data.trim())) {
+                return;
+            }
+            JSONObject event = new JSONObject(data);
+            if (event.has("error")) {
+                throw new ModelCompletionException("OpenAI stream error: " + describeError(event.opt("error")));
+            }
+            // 部分兼容端点会在最后一个 chunk（含空 choices）携带 usage，先于 choices 处理。
+            JSONObject usage = event.optJSONObject("usage");
+            if (usage != null) {
+                usageInputTokens[0] = Math.max(usageInputTokens[0], usage.optInt("prompt_tokens", 0));
+                usageOutputTokens[0] = Math.max(usageOutputTokens[0], usage.optInt("completion_tokens", 0));
+            }
+            JSONArray choices = event.optJSONArray("choices");
+            if (choices == null || choices.length() == 0) {
+                return;
+            }
+            JSONObject choice = choices.optJSONObject(0);
+            if (choice == null) {
+                return;
+            }
+            if ("content_filter".equals(choice.optString("finish_reason"))) {
+                throw new ModelCompletionException("OpenAI stream error: output blocked by content safety policy");
+            }
+            JSONObject delta = choice.optJSONObject("delta");
+            if (delta == null) {
+                return;
+            }
 
-                JSONArray toolCalls = delta.optJSONArray("tool_calls");
-                if (toolCalls != null) {
-                    appendToolCallDeltas(toolCallBuilders, toolCalls);
-                }
+            JSONArray toolCalls = delta.optJSONArray("tool_calls");
+            if (toolCalls != null && toolCalls.length() > 0) {
+                commitBuffer.markToolUseStarted();
+                appendToolCallDeltas(toolCallBuilders, toolCalls);
+            }
 
-                String reasoningDelta = reasoningDeltaExtractor.extract(delta);
-                if (reasoningDelta.length() > 0) {
-                    reasoning.append(reasoningDelta);
-                    if (callback != null) {
-                        callback.onReasoningDelta(reasoningDelta);
-                    }
-                }
-
-                if (delta.has("content") && !delta.isNull("content")) {
-                    ThinkTagParser.Result parsed = thinkTagParser.append(delta.optString("content"));
-                    appendParsedDelta(text, reasoning, parsed, callback);
-                }
-            });
-            String trailingReasoning = reasoningDeltaExtractor.flush();
-            if (trailingReasoning.length() > 0) {
-                reasoning.append(trailingReasoning);
+            String reasoningDelta = reasoningDeltaExtractor.extract(delta);
+            if (reasoningDelta.length() > 0) {
+                reasoning.append(reasoningDelta);
+                commitBuffer.appendReasoning(reasoningDelta);
                 if (callback != null) {
-                    callback.onReasoningDelta(trailingReasoning);
+                    callback.onReasoningDelta(reasoningDelta);
                 }
             }
 
-            appendParsedDelta(text, reasoning, thinkTagParser.flush(), callback);
-            return new ModelCompletionResponse(
-                    text.toString(),
-                    reasoning.toString(),
-                    buildToolCalls(toolCallBuilders),
-                    usageInputTokens[0],
-                    usageOutputTokens[0]
-            );
+            if (delta.has("content") && !delta.isNull("content")) {
+                ThinkTagParser.Result parsed = thinkTagParser.append(delta.optString("content"));
+                appendParsedDeltaTo(text, reasoning, parsed, callback, commitBuffer);
+            }
+        });
+        String trailingReasoning = reasoningDeltaExtractor.flush();
+        if (trailingReasoning.length() > 0) {
+            reasoning.append(trailingReasoning);
+            commitBuffer.appendReasoning(trailingReasoning);
+            if (callback != null) {
+                callback.onReasoningDelta(trailingReasoning);
+            }
+        }
+
+        appendParsedDeltaTo(text, reasoning, thinkTagParser.flush(), callback, commitBuffer);
+        return new ModelCompletionResponse(
+                text.toString(),
+                reasoning.toString(),
+                buildToolCalls(toolCallBuilders),
+                usageInputTokens[0],
+                usageOutputTokens[0]
+        );
         } catch (ModelCompletionException e) {
-            throw e;
+            throw attachPartial(e, commitBuffer);
         } catch (Exception e) {
-            throw new ModelCompletionException("OpenAI compatible protocol stream parse failed: " + e.getMessage(), e);
+            throw attachPartial(
+                    new ModelCompletionException("OpenAI compatible protocol stream parse failed: " + e.getMessage(), e),
+                    commitBuffer);
+        }
+    }
+
+    /** 流中断且未越过工具边界时，把已收到内容挂到异常上供编排层提交。 */
+    private static ModelCompletionException attachPartial(ModelCompletionException e,
+                                                          cn.lineai.ai.retry.AssistantCommitBuffer buffer) {
+        if (e.hasPartial() || buffer == null || !buffer.hasPartial()) {
+            return e;
+        }
+        return e.withPartial(buffer.text(), buffer.reasoning(), buffer.crossedToolBoundary());
+    }
+
+    /** appendParsedDelta 的带 commitBuffer 版本：流出的文本同步进缓冲。 */
+    private void appendParsedDeltaTo(StringBuilder text, StringBuilder reasoning,
+                                     ThinkTagParser.Result parsed, ModelStreamCallback callback,
+                                     cn.lineai.ai.retry.AssistantCommitBuffer commitBuffer) {
+        if (parsed == null) {
+            return;
+        }
+        if (parsed.getThinking().length() > 0) {
+            reasoning.append(parsed.getThinking());
+            commitBuffer.appendReasoning(parsed.getThinking());
+            if (callback != null) {
+                callback.onReasoningDelta(parsed.getThinking());
+            }
+        }
+        if (parsed.getText().length() > 0) {
+            text.append(parsed.getText());
+            commitBuffer.appendText(parsed.getText());
+            if (callback != null) {
+                callback.onTextDelta(parsed.getText());
+            }
         }
     }
 
@@ -244,26 +288,6 @@ public final class OpenAiCompatibleProtocol extends AbstractHttpModelProtocol {
     }
 
     private static final class ToolCallBuilder extends AbstractToolCallBuilder {
-    }
-
-    private void appendParsedDelta(
-            StringBuilder text,
-            StringBuilder reasoning,
-            ThinkTagParser.Result parsed,
-            ModelStreamCallback callback
-    ) {
-        if (parsed.getThinking().length() > 0) {
-            reasoning.append(parsed.getThinking());
-            if (callback != null) {
-                callback.onReasoningDelta(parsed.getThinking());
-            }
-        }
-        if (parsed.getText().length() > 0) {
-            text.append(parsed.getText());
-            if (callback != null) {
-                callback.onTextDelta(parsed.getText());
-            }
-        }
     }
 
     private void applyReasoningRequest(ModelConfig config, JSONObject body, ModelRequestOptions options) throws Exception {

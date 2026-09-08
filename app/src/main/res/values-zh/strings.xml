@@ -85,6 +85,10 @@
     <string name="message_model_switched">已切换模型</string>
     <string name="model_retry_attempt">正在第 %1$d/%2$d 次重试，错误：%3$s</string>
     <string name="model_retry_failed">模型通信失败：%1$s</string>
+    <string name="model_retry_countdown">%1$d 秒后重试（第 %2$d/%3$d 次，%4$s）</string>
+    <string name="model_partial_kept">已保留重试前的部分回复。</string>
+    <string name="model_fail_auth">认证失败，请检查 API Key。</string>
+    <string name="model_fail_overload">服务商持续过载，多次重试失败。</string>
     <string name="message_thinking_label">思考</string>
     <string name="message_thinking_collapsed">展开</string>
     <string name="message_thinking_expanded">收起</string>

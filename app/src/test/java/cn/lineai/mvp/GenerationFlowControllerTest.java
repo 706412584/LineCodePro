@@ -116,6 +116,21 @@ public final class GenerationFlowControllerTest {
         }
 
         @Override
+        public String formatRetryCountdown(int seconds, int attempt, int maxRetries, String error) {
+            return "retry in " + seconds + "s (" + attempt + "/" + maxRetries + ")";
+        }
+
+        @Override
+        public String formatPartialKept() {
+            return "partial kept";
+        }
+
+        @Override
+        public String formatModelFailed(cn.lineai.ai.retry.ModelApiError.Kind kind, String error) {
+            return (error == null ? "" : error);
+        }
+
+        @Override
         public String toolLimitNotExecutedMessage() {
             return "tool limit reached";
         }

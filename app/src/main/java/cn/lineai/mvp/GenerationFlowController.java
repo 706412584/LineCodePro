@@ -68,6 +68,15 @@ final class GenerationFlowController {
 
         String formatModelFailed(String error);
 
+        /** 倒计时重试提示：“X 秒后重试（第 N/M 次）”。 */
+        String formatRetryCountdown(int seconds, int attempt, int maxRetries, String error);
+
+        /** 部分内容保留提示。 */
+        String formatPartialKept();
+
+        /** 按错误分类的失败文案（AUTH/overload 有专属文案，其余用通用模板）。 */
+        String formatModelFailed(cn.lineai.ai.retry.ModelApiError.Kind kind, String error);
+
         String toolLimitNotExecutedMessage();
     }
 
@@ -75,6 +84,10 @@ final class GenerationFlowController {
 
     private static final int MAX_RETRIES = 3;
     private static final long RETRY_DELAY_MS = 5000L;
+    /** 前 N 次重试静默不插提示（cc-haha hidden = retryAttempt < 4）。 */
+    private static final int SILENT_RETRY_COUNT = 3;
+    /** 本轮 generation 内 529/overloaded 连续计数（cc-haha MAX_529_RETRIES）。 */
+    private int overloadRetryCount = 0;
 
     private final ArrayList<ChatMessage> messages;
     private final ChatSessionStore chatSessionStore;
@@ -443,25 +456,61 @@ final class GenerationFlowController {
             failGeneration(generationId, failedAssistantId, host.formatModelFailed(error.getMessage()));
             return;
         }
-        int nextAttempt = failedAttempt + 1;
-        if (nextAttempt >= MAX_RETRIES) {
-            failGeneration(generationId, failedAssistantId, host.formatModelFailed(error.getMessage()));
+        // 错误分类（cc-haha classifyAPIError 语义）：协议层已带 kind，缺失时从异常解析
+        cn.lineai.ai.retry.ModelApiError.Kind kind = error.kind() != cn.lineai.ai.retry.ModelApiError.Kind.UNKNOWN
+                ? error.kind()
+                : cn.lineai.ai.retry.ModelApiError.fromThrowable(error).kind();
+        boolean crossedBoundary = error.crossedToolBoundary();
+        boolean hasPartial = error.hasPartial();
+        cn.lineai.ai.retry.ModelRetryDecision decision = cn.lineai.ai.retry.ModelRetryDecision.evaluate(
+                kind, failedAttempt, overloadRetryCount, crossedBoundary, hasPartial);
+
+        if (decision.action() == cn.lineai.ai.retry.ModelRetryDecision.Action.FAIL
+                || decision.action() == cn.lineai.ai.retry.ModelRetryDecision.Action.COMMIT_PARTIAL_AND_FAIL) {
+            if (decision.commitPartial()) {
+                commitPartialContent(generationId, failedAssistantId,
+                        error.partialText(), error.partialReasoning());
+            }
+            failGeneration(generationId, failedAssistantId, host.formatModelFailed(kind, error.getMessage()));
             return;
         }
+
+        // 重试路径
+        int nextAttempt = failedAttempt + 1;
+        long delayMs = cn.lineai.ai.retry.RetryBackoff.delayMs(failedAttempt,
+                cn.lineai.ai.retry.ModelApiError.fromThrowable(error, error.watchdogFired()), new java.util.Random());
+        if (kind == cn.lineai.ai.retry.ModelApiError.Kind.SERVER_OVERLOAD) {
+            overloadRetryCount++;
+        }
+        final boolean commitPartial = decision.commitPartial();
 
         mainThread.post(() -> {
             if (!chatSessionStore.isActiveGeneration(generationId)
                     || cancellationToken != null && cancellationToken.isCancelled()) {
                 return;
             }
-            int index = findMessageIndex(failedAssistantId);
-            if (index >= 0) {
-                messages.remove(index);
+            if (commitPartial) {
+                commitPartialContent(generationId, failedAssistantId,
+                        error.partialText(), error.partialReasoning());
+            } else {
+                int index = findMessageIndex(failedAssistantId);
+                if (index >= 0) {
+                    messages.remove(index);
+                }
+                streamingRenderController.removeRawText(failedAssistantId);
             }
-            streamingRenderController.removeRawText(failedAssistantId);
 
-            String retryText = host.formatRetryNotice(nextAttempt + 1, MAX_RETRIES, error.getMessage());
-            messages.add(chatSessionStore.withProcessingTimes(ChatMessage.retryNotice(host.nextId(), retryText)));
+            // 前 3 次静默（cc-haha hidden = retryAttempt < 4）；之后插倒计时提示
+            if (nextAttempt >= SILENT_RETRY_COUNT) {
+                int remainingSeconds = (int) Math.max(1, delayMs / 1000);
+                String retryText = host.formatRetryCountdown(remainingSeconds, nextAttempt + 1,
+                        cn.lineai.ai.retry.RetryBackoff.MAX_REQUEST_RETRIES, error.getMessage());
+                messages.add(chatSessionStore.withProcessingTimes(ChatMessage.retryNotice(host.nextId(), retryText)));
+                if (commitPartial) {
+                    messages.add(chatSessionStore.withProcessingTimes(
+                            ChatMessage.retryNotice(host.nextId(), host.formatPartialKept())));
+                }
+            }
             host.persistCurrentConversation();
             host.render();
 
@@ -472,8 +521,30 @@ final class GenerationFlowController {
                 }
                 retryableModelStream(generationId, selectedModel, cancellationToken,
                         requestMessages, usedToolCallCount, nextAttempt, userInput);
-            }, RETRY_DELAY_MS);
+            }, delayMs);
         });
+    }
+
+    /**
+     * 提交流中断时已收到的部分内容：原 assistant 消息定格为普通回复（processing=false），
+     * 进入会话历史；后续重试会创建新 assistant 消息继续写入。
+     */
+    private void commitPartialContent(int generationId, String assistantId, String partialText, String partialReasoning) {
+        streamingRenderController.flush();
+        int index = findMessageIndex(assistantId);
+        String text = partialText == null ? "" : partialText;
+        String reasoning = partialReasoning == null ? "" : partialReasoning;
+        if (text.length() == 0 && reasoning.length() == 0) {
+            return;
+        }
+        if (index >= 0) {
+            ChatMessage message = messages.get(index);
+            messages.set(index, message.withContent(text, reasoning, false));
+        } else {
+            messages.add(chatSessionStore.withProcessingTimes(new ChatMessage(host.nextId(),
+                    ChatMessage.Role.ASSISTANT, text, false).withContent(text, reasoning, false)));
+        }
+        streamingRenderController.removeRawText(assistantId);
     }
 
     void handleToolReview(String state) {

@@ -65,37 +65,55 @@ public final class CodexResponsesProtocol extends AbstractHttpModelProtocol {
             ModelCancellationToken cancellationToken,
             ModelRequestOptions options
     ) throws ModelCompletionException {
+        ModelRequestOptions requestOptions = options == null ? ModelRequestOptions.defaults() : options;
+        JSONObject body;
         try {
-            ModelRequestOptions requestOptions = options == null ? ModelRequestOptions.defaults() : options;
-            JSONObject body = requestBuilder.buildRequestBody(config, messages, requestOptions);
-            HashMap<String, String> headers = requestBuilder.codexHeaders(config.getApiKey());
-
-            StringBuilder text = new StringBuilder();
-            StringBuilder reasoning = new StringBuilder();
-            ReasoningSummaryStream reasoningSummaryStream = new ReasoningSummaryStream(reasoning, callback);
-            LinkedHashMap<String, CodexOutputMerger.ToolCallBuilder> toolCallBuilders = new LinkedHashMap<>();
-            HashMap<String, StringBuilder> customToolInputs = new HashMap<>();
-            final int[] usageInputTokens = new int[1];
-            final int[] usageOutputTokens = new int[1];
-
-            postJsonSse(requestBuilder.responsesEndpoint(config.getBaseUrl()), body, headers, cancellationToken, (eventType, data) -> {
-                handleSseEvent(eventType, data, callback, text, reasoning, reasoningSummaryStream,
-                        toolCallBuilders, customToolInputs, usageInputTokens, usageOutputTokens);
-            });
-            reasoningSummaryStream.flush();
-
-            return new ModelCompletionResponse(
-                    text.toString(),
-                    reasoning.toString(),
-                    outputMerger.buildToolCalls(toolCallBuilders),
-                    usageInputTokens[0],
-                    usageOutputTokens[0]
-            );
-        } catch (ModelCompletionException e) {
-            throw e;
+            body = requestBuilder.buildRequestBody(config, messages, requestOptions);
         } catch (Exception e) {
-            throw new ModelCompletionException("Codex Responses protocol stream parse failed: " + e.getMessage(), e);
+            throw new ModelCompletionException("Codex request build failed: " + e.getMessage(), e);
         }
+        HashMap<String, String> headers = requestBuilder.codexHeaders(config.getApiKey());
+
+        StringBuilder text = new StringBuilder();
+        StringBuilder reasoning = new StringBuilder();
+        ReasoningSummaryStream reasoningSummaryStream = new ReasoningSummaryStream(reasoning, callback);
+        LinkedHashMap<String, CodexOutputMerger.ToolCallBuilder> toolCallBuilders = new LinkedHashMap<>();
+        HashMap<String, StringBuilder> customToolInputs = new HashMap<>();
+        final int[] usageInputTokens = new int[1];
+        final int[] usageOutputTokens = new int[1];
+        // 部分内容保留（cc-haha commit buffer）
+        cn.lineai.ai.retry.AssistantCommitBuffer commitBuffer = new cn.lineai.ai.retry.AssistantCommitBuffer();
+
+        try {
+        postJsonSse(requestBuilder.responsesEndpoint(config.getBaseUrl()), body, headers, cancellationToken, (eventType, data) -> {
+            handleSseEvent(eventType, data, callback, text, reasoning, reasoningSummaryStream,
+                    toolCallBuilders, customToolInputs, usageInputTokens, usageOutputTokens, commitBuffer);
+        });
+        reasoningSummaryStream.flush();
+
+        return new ModelCompletionResponse(
+                text.toString(),
+                reasoning.toString(),
+                outputMerger.buildToolCalls(toolCallBuilders),
+                usageInputTokens[0],
+                usageOutputTokens[0]
+        );
+        } catch (ModelCompletionException e) {
+            throw attachPartial(e, commitBuffer);
+        } catch (Exception e) {
+            throw attachPartial(
+                    new ModelCompletionException("Codex Responses protocol stream parse failed: " + e.getMessage(), e),
+                    commitBuffer);
+        }
+    }
+
+    /** 流中断且未越过工具边界时，把已收到内容挂到异常上供编排层提交。 */
+    private static ModelCompletionException attachPartial(ModelCompletionException e,
+                                                          cn.lineai.ai.retry.AssistantCommitBuffer buffer) {
+        if (e.hasPartial() || buffer == null || !buffer.hasPartial()) {
+            return e;
+        }
+        return e.withPartial(buffer.text(), buffer.reasoning(), buffer.crossedToolBoundary());
     }
 
     private void handleSseEvent(
@@ -108,7 +126,8 @@ public final class CodexResponsesProtocol extends AbstractHttpModelProtocol {
             LinkedHashMap<String, CodexOutputMerger.ToolCallBuilder> toolCallBuilders,
             HashMap<String, StringBuilder> customToolInputs,
             int[] usageInputTokens,
-            int[] usageOutputTokens
+            int[] usageOutputTokens,
+            cn.lineai.ai.retry.AssistantCommitBuffer commitBuffer
     ) throws Exception {
         if ("[DONE]".equals(data.trim())) {
             return;
@@ -129,13 +148,23 @@ public final class CodexResponsesProtocol extends AbstractHttpModelProtocol {
         }
 
         if ("response.function_call_arguments.delta".equals(type) && event.has("delta")) {
+            commitBuffer.markToolUseStarted();
             appendFunctionArgumentsDelta(toolCallBuilders, event, event.optString("delta"));
             return;
+        }
+
+        if ("response.output_item.added".equals(type)) {
+            JSONObject item = event.optJSONObject("item");
+            String itemType = item == null ? "" : item.optString("type");
+            if ("function_call".equals(itemType) || "custom_tool_call".equals(itemType) || "local_shell_call".equals(itemType)) {
+                commitBuffer.markToolUseStarted();
+            }
         }
 
         if ("response.output_text.delta".equals(type) && event.has("delta")) {
             String delta = event.optString("delta");
             text.append(delta);
+            commitBuffer.appendText(delta);
             if (callback != null) {
                 callback.onTextDelta(delta);
             }
@@ -148,7 +177,9 @@ public final class CodexResponsesProtocol extends AbstractHttpModelProtocol {
         }
 
         if ("response.reasoning_summary_text.delta".equals(type) && event.has("delta")) {
-            reasoningSummaryStream.append(event.optString("delta"));
+            String delta = event.optString("delta");
+            reasoningSummaryStream.append(delta);
+            commitBuffer.appendReasoning(delta);
             return;
         }
 
@@ -156,6 +187,7 @@ public final class CodexResponsesProtocol extends AbstractHttpModelProtocol {
             reasoningSummaryStream.flush();
             String delta = event.optString("delta");
             reasoning.append(delta);
+            commitBuffer.appendReasoning(delta);
             if (callback != null) {
                 callback.onReasoningDelta(delta);
             }
