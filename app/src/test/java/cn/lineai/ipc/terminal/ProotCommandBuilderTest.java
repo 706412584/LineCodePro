@@ -19,9 +19,12 @@ public final class ProotCommandBuilderTest {
         Assert.assertTrue(command, command.contains("PROOT_LOADER='/data/app/cn.lineai/lib/arm64/libproot_loader.so'"));
         Assert.assertTrue(command, command.contains("PROOT_TMP_DIR='")
                 && command.contains("files/proot/tmp'"));
-        Assert.assertTrue(command, command.contains("-R '") && command.contains("files/proot/alpine'"));
+        // -r 而非 -R：-R 会把宿主 /tmp（tmpfs，部分系统上 app 不可写）盖到 guest /tmp
+        Assert.assertTrue(command, command.contains("-r '") && command.contains("files/proot/alpine'"));
+        Assert.assertFalse(command, command.contains("-R '"));
         Assert.assertTrue(command, command.contains("-0 --link2symlink"));
-        Assert.assertTrue(command, command.contains("-b /storage -b /sdcard -b /system"));
+        Assert.assertTrue(command, command.contains("-b /dev -b /proc -b /sys -b /system"));
+        Assert.assertTrue(command, command.contains("-b /storage -b /sdcard"));
         Assert.assertTrue(command, command.contains("-w '/storage/emulated/0/AGG'"));
         Assert.assertTrue(command, command.contains("export HOME=/root TERM=xterm-256color PATH="));
         Assert.assertTrue(command, command.endsWith("ls'"));
